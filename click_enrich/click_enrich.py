@@ -117,21 +117,18 @@ def main():
         print "*"*40
         print "Running:",i
         print "*"*40
+        batch = f[1].data[i:i+args.batchsize]
         # Serious memory errors using FITS rows with astro types
         #   in multiprocessing... still need to debug (<= TODO: )
         # Just pass in the index, RA,DE
         r2 = []
-        for j in xrange(i,i+args.batchsize):
-            row = f[1].data[j]
-            r2.append((j,float(row[13]),float(row[14])))
-            del row # no faith
+        for j in xrange(len(batch)):
+            r2.append((j,float(batch[j][13]),float(batch[j][14])))
         res = p.map(_work,r2)
         del r2
         ofile = open(ofname,'ab')
         for retval in res:
-            row = f[1].data[retval[0]]
-            ofile.write(','.join([str(i) for i in row]))
-            del row # no faith
+            ofile.write(','.join([str(i) for i in batch[retval[0]]]))
             if len(retval) > 1:
                 ofile.write(',')
                 ofile.write(','.join(retval[1:]))
