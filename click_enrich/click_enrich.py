@@ -82,7 +82,6 @@ def main():
     import os
     import argparse
     import multiprocessing
-    MAX_PROCS = 8
     ap = argparse.ArgumentParser(description="Enrich click data with Simbad fields. "+
                                  "Takes click data as FITS file")
     ap.add_argument("file",type=str,
@@ -107,7 +106,7 @@ def main():
     import warnings
     warnings.filterwarnings('ignore',category=UserWarning, append=True)
     f = fits.open(args.file,memmap=True)
-    p = multiprocessing.Pool(MAX_PROCS)
+    p = multiprocessing.Pool(args.maxprocs)
     if args.runto is None:
         runto = len(f[1].data)
     else:
