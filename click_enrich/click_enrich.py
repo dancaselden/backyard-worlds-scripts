@@ -1,138 +1,203 @@
+import sys
+import requests
+import json
+import time
 from astropy.io import fits
-from astroquery.simbad import Simbad
-import astropy.coordinates as coord
-import astropy.units as u
 
-#TODO: pull out into helper lib
-def set_votable_fields(fields=None):
-    # astroquery is pretty wonky... if you clear all
-    #   fields, it throws an error and resets them:
-    # Simbad.remove_votable_fields(*Simbad.get_votable_fields())
-    #   causes an error
-    if fields is None:
-        fields = set(('ra','dec','pmra','pmdec'))
-    if not isinstance(fields,set):
-        try:
-            fields = set(fields)
-        except Exception,e:
-            sys.std.err.write("set_votable_fields needs a set "+
-                              "of fields, or a datatype that "+
-                              "can be converted to a set")
-            raise e
-    # Format fields for backyard worlds common use
-    if 'ra' in fields:
-        fields.remove('ra')
-        fields.add('ra(2;A;FK5;J2000;2000)')
-    if 'dec' in fields:
-        fields.remove('dec')
-        fields.add('dec(2;D;FK5;J2000;2000)')
-    # Duplicates are possible, so reset to their default
-    Simbad.reset_votable_fields()
-    # Capture original fields
-    old_fields = set(Simbad.get_votable_fields())
-    # Add all fields first (so we don't empty it and trigger
-    #   their wonky error
-    # Add fields in the new fields but not yet in the old_fields
-    Simbad.add_votable_fields(*(fields-old_fields))
-    # Then remove fields in the old_fields set that are not
-    #   present in the new fields set
-    Simbad.remove_votable_fields(*(old_fields-fields))
+def get_pm(row):
+    # Calculate total PM
+    pmra = row[3].strip()
+    pmde = row[4].strip()
+    if (len(pmra) == 0 or len(pmde) == 0 or
+        pmra == "~" or pmde == "~"):
+        pm = ""
+    else:
+        pmra = float(row[3])
+        pmde = float(row[4])
+        pm = ((pmra**2)+(pmde**2))**(0.5)
+    return pm
 
+###
+# Angsep
+import numpy
+import string
+def angsep(ra1deg,dec1deg,ra2deg,dec2deg):
+    """
+    http://www.stsci.edu/~ferguson/software/pygoodsdist/pygoods/angsep.py
+    From angsep.py Written by Enno Middelberg 2001
 
-def enrich_click(args):
-    idx,ra,de = args
-    # Build SkyCoord object for Simbad query
-    c = coord.SkyCoord(ra,de,frame="fk5",unit="deg")
-    # Try 10 times in case of timeout
-    for i in xrange(10):
-        try:
-            # Query Simbad for region around SkyCoord c w/ radius
-            r = Simbad.query_region(c, radius='0d0m30s')
-            break
-        except requests.exceptions.ConnectionError,e:
-            sys.stderr.write("Error connecting with query %s\n"%str(c))
+    Determine separation in degrees between two celestial objects 
+    arguments are RA and Dec in decimal degrees. 
+    """
+    ra1rad=ra1deg*numpy.pi/180
+    dec1rad=dec1deg*numpy.pi/180
+    ra2rad=ra2deg*numpy.pi/180
+    dec2rad=dec2deg*numpy.pi/180
+    # calculate scalar product for determination
+    # of angular separation
+    x=numpy.cos(ra1rad)*numpy.cos(dec1rad)*numpy.cos(ra2rad)*numpy.cos(dec2rad)
+    y=numpy.sin(ra1rad)*numpy.cos(dec1rad)*numpy.sin(ra2rad)*numpy.cos(dec2rad)
+    z=numpy.sin(dec1rad)*numpy.sin(dec2rad)
+    rad=numpy.arccos(x+y+z) # Sometimes gives warnings when coords match
+    # use Pythargoras approximation if rad < 1 arcsec
+    sep = numpy.choose(rad<0.000004848,(
+        numpy.sqrt((numpy.cos(dec1rad)*(ra1rad-ra2rad))**2+(dec1rad-dec2rad)**2),rad))
+    # Angular separation
+    sep=sep*180/numpy.pi
+    return sep
+###
 
-    if r is not None:
-        # Object found in simbad
-        # Calculate total PM as:
-        # (pmra^2 + pmde^2) ^ (1/2)
-        pmra = r[0][r.index_column("PMRA")]
-        pmdec = r[0][r.index_column("PMDEC")]
-        if ((hasattr(pmra,"mask") and pmra.mask) or
-            (hasattr(pmdec,"mask") and pmdec.mask)):
-            # One or more not available
-            pm = ""
+def get_sep(click,row):
+    # Calculate angular separation
+    ra1,de1 = click
+    ra2,de2 = float(row[1]),float(row[2])
+    return angsep(ra1,de1,ra2,de2)
+def ask_simbad(clicks):
+    global writelock, simbadlock, simbadtime, args, fitsdata
+    cmds = [
+        'output console=off script=off', # doesn't appear to be a way to disable errors
+        'format object "%OTYPE|%COO(d;A)|%COO(d;D)|%PM(A)|%PM(D)"',
+        'set limit 1',
+    ]
+    for ra,de in clicks:
+        # Expecting iterable of (ra,de)
+        cmds.append("echodata -")
+        cmds.append("query coo %s %s radius=%s frame=FK5 equi=2000.0"%
+                    (ra,de,"30.0s"))
+    cmds = '\n'.join(cmds)
+    data = {'script': cmds}
+    simbadlock.acquire()
+    cur = time.time()
+    freq = 0.2
+    if cur-simbadtime < freq: # Simbad says no more than 6 per sec
+        sleep(freq - (cur-simbadtime))
+    simbadtime = time.time()
+    simbadlock.release()
+    r = requests.post("http://simbad.u-strasbg.fr/simbad/sim-script?echo%20%3d%3d",
+                      data=data)
+    if r.status_code != 200:
+        return r.status_code,r.text
+    # Break off the data section from the response
+    tok = "::data::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::"
+    ofs = r.text.find(tok)
+    if ofs < 0:
+        return -1,r.text
+    data = r.text[ofs+len(tok):].split('\n')
+    return r.status_code,data
+def query_clicks(clicks):
+    global writelock, simbadlock, simbadtime, args, fitsdata
+    # Query simbad and break apark results
+    sc,data = ask_simbad(clicks)
+    if sc != 200:
+        return sc,data
+    # For each row, calculate PM, angular separation,
+    #   or track whether the row was empty
+    res = []
+    empty = False
+    i = -1
+    for row in data:
+        if row == "":
+            continue
+        if row=="-":
+            if empty:
+                # No result for prev query
+                res.append(None)
+            empty = True
+            i += 1
         else:
-            pm = ((pmra**2)+(pmdec**2))**(0.5)
-        # Calculate distance
-        # Supposedly Simbad can do this with the "distance"
-        #   field, but it seems to be usually empty? Maybe
-        #   "distance" refers to 3d distance?
-        ra = r[0][r.index_column("RA_2_A_FK5_J2000_2000")]
-        dec = r[0][r.index_column("DEC_2_D_FK5_J2000_2000")]
-        c2 = coord.SkyCoord(ra,dec,frame="fk5",unit=(u.hourangle, u.deg))
-        sep = c.separation(c2)
-        return (idx,str(pm),
-                sep.to_string(unit=u.deg,decimal=False),
-                r[0][r.index_column("OTYPE")])
-    return (idx,)
-def _work(row):
-    return enrich_click(row)
+            row = row.split('|')
+            pm = get_pm(row)
+            sep = get_sep(clicks[i],row)
+            res.append((str(sep),pm,row[0]))
+            empty = False
+    else:
+        # Check if the last row had results
+        if empty:
+            res.append(None)
+    return 200,res
+def to_csv(of,batch,data):
+    global writelock, simbadlock, simbadtime, args, fitsdata
+    for i in xrange(len(batch)):
+        of.write(','.join([str(x) for x in batch[i]]))
+        if data[i] is not None:
+            # No result, write line
+            of.write(',')
+            of.write(','.join([str(x) for x in data[i]]))
+        else:
+            # write empty cells
+            of.write(',,,')
+        of.write(',\n')
+def work(idxs):
+    global writelock, simbadlock, simbadtime, args, fitsdata
+    print "*"*40,'\n',"Running:",idxs,'\n',"*"*40
+    batch = fitsdata[idxs[0]:idxs[1]]
+    clicks = []
+    for i in xrange(len(batch)):
+        clicks.append((batch[i][13],batch[i][14]))
+    try:
+        stat,data = query_clicks(clicks)
+    except requests.exceptions.ConnectionError,e:
+        idxs1 = (idxs[0],idxs[0]+((idxs[1]-idxs[0])/2))
+        idxs2 = (idxs[0]+((idxs[1]-idxs[0])/2),idxs[1])
+        print idxs,"broke. Splitting it in half and running again:",idxs1,idxs2
+        work(idxs1)
+        work(idxs2)
+        return
+    if stat != 200:
+        print "Error:",txt
+        return
+    writelock.acquire()
+    of = open(args.outfile,'ab')
+    to_csv(of,batch,data)
+    of.close()
+    writelock.release()
+def winit(writelock_, simbadlock_, simbadtime_, args_, fitsdata_):
+    global writelock, simbadlock, simbadtime, args, fitsdata
+    writelock = writelock_
+    simbadlock = simbadlock_
+    simbadtime = simbadtime_
+    args = args_
+    fitsdata = fitsdata_
 def main():
     import os
     import argparse
     import multiprocessing
+    # Do args & usage
     ap = argparse.ArgumentParser(description="Enrich click data with Simbad fields. "+
                                  "Takes click data as FITS file")
     ap.add_argument("file",type=str,
                     help="Path to FITS file with click data")
     ap.add_argument("--outfile",type=str,required=False,
                     help="Where to write results")
-    ap.add_argument("--batchsize",type=int,default="1000")
+    ap.add_argument("--batchsize",type=int,default=8192)
     ap.add_argument("--maxprocs",type=int,default=8)
     ap.add_argument("--skipto",type=int,default=0)
     ap.add_argument("--runto",type=int,default=None)
     args = ap.parse_args()
+    # Validate / finalize args
+    fitsdata = fits.open(args.file,memmap=True)[1].data
+    if args.runto is None:
+        args.runto = len(fitsdata)
+    assert(args.skipto < args.runto)
     if args.outfile == "" or args.outfile is None:
         b,e = os.path.splitext(args.file)
-        ofname = "%s_processed.csv"%(b)
-    else:
-        ofname = args.outfile
-    # TODO: no need to do this in each proc, but also need to guarantee
-    #       it happens before enrich is called for non main() users
-    # Tell Simbad which fields to grab (e.g., 'coordinates', 'pm')
-    set_votable_fields(["ra","dec","pmra","pmdec","otype"])
-    # Turn off Simbad empty warnings
-    import warnings
-    warnings.filterwarnings('ignore',category=UserWarning, append=True)
-    f = fits.open(args.file,memmap=True)
-    p = multiprocessing.Pool(args.maxprocs)
-    if args.runto is None:
-        runto = len(f[1].data)
-    else:
-        runto = args.runto
-    assert(args.skipto < runto)
-    for i in xrange(args.skipto,len(f[1].data),args.batchsize):
-        print "*"*40
-        print "Running:",i
-        print "*"*40
-        batch = f[1].data[i:i+args.batchsize]
-        # Serious memory errors using FITS rows with astro types
-        #   in multiprocessing... still need to debug (<= TODO: )
-        # Just pass in the index, RA,DE
-        r2 = []
-        for j in xrange(len(batch)):
-            r2.append((j,float(batch[j][13]),float(batch[j][14])))
-        res = p.map(_work,r2)
-        del r2
-        ofile = open(ofname,'ab')
-        for retval in res:
-            ofile.write(','.join([str(i) for i in batch[retval[0]]]))
-            if len(retval) > 1:
-                ofile.write(',')
-                ofile.write(','.join(retval[1:]))
-            ofile.write('\n')
-        ofile.close()
-
+        args.outfile = "%s_processed.csv"%(b)
+    print "Will write to",args.outfile
+    open(args.outfile,'wb').close() # test file and truncate
+    # Divide input into batches
+    batches = [(i,min(i+args.batchsize,args.runto))
+               for i in xrange(args.skipto,args.runto,args.batchsize)]
+    # Create locks
+    # Controls write access to csv output file
+    writelock = multiprocessing.Lock()
+    # Throttles connections to Simbad
+    simbadlock = multiprocessing.Lock()
+    simbadtime = 0
+    # Create workers
+    p = multiprocessing.Pool(args.maxprocs,initializer=winit,
+                             initargs=(writelock, simbadlock,
+                                       simbadtime, args, fitsdata))
+    p.map(work,batches)
+    
 if __name__ == "__main__":
     main()
