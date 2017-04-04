@@ -3,17 +3,19 @@ import requests
 import json
 import time
 from astropy.io import fits
+# TODO: make sync version w/o =>
+import multiprocessing
 
 def get_pm(row):
     # Calculate total PM
-    pmra = row[3].strip()
-    pmde = row[4].strip()
+    pmra = row[2].strip()
+    pmde = row[3].strip()
     if (len(pmra) == 0 or len(pmde) == 0 or
         pmra == "~" or pmde == "~"):
         pm = ""
     else:
-        pmra = float(row[3])
-        pmde = float(row[4])
+        pmra = float(row[2])
+        pmde = float(row[3])
         pm = ((pmra**2)+(pmde**2))**(0.5)
     return pm
 
@@ -56,7 +58,7 @@ def ask_simbad(clicks):
     global writelock, simbadlock, simbadtime, args, fitsdata
     cmds = [
         'output console=off script=off', # doesn't appear to be a way to disable errors
-        'format object "%OTYPE|%COO(d;A)|%COO(d;D)|%PM(A)|%PM(D)"',
+        'format object "%OTYPE|%DIST|%PM(A)|%PM(D)"',
         'set limit 1',
     ]
     for ra,de in clicks:
@@ -81,9 +83,9 @@ def ask_simbad(clicks):
     tok = "::data::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::"
     ofs = r.text.find(tok)
     if ofs < 0:
-        return -1,r.text
-    data = r.text[ofs+len(tok):].split('\n')
-    return r.status_code,data
+        # Did.... did they just stop returning headers???
+        return r.status_code,r.text.split('\n')
+    return r.status_code,r.text[ofs+len(tok):].split('\n')
 def query_clicks(clicks):
     global writelock, simbadlock, simbadtime, args, fitsdata
     # Query simbad and break apark results
@@ -107,7 +109,8 @@ def query_clicks(clicks):
         else:
             row = row.split('|')
             pm = get_pm(row)
-            sep = get_sep(clicks[i],row)
+            #sep = get_sep(clicks[i],row)
+            sep = row[1]
             res.append((str(sep),pm,row[0]))
             empty = False
     else:
@@ -144,7 +147,7 @@ def work(idxs):
         work(idxs2)
         return
     if stat != 200:
-        print "Error:",txt
+        print "Error:",stat,data
         return
     writelock.acquire()
     of = open(args.outfile,'ab')
@@ -158,10 +161,17 @@ def winit(writelock_, simbadlock_, simbadtime_, args_, fitsdata_):
     simbadtime = simbadtime_
     args = args_
     fitsdata = fitsdata_
+def main_init():
+    global writelock, simbadlock, simbadtime, args, fitsdata
+    # Create locks
+    # Controls write access to csv output file
+    writelock = multiprocessing.Lock()
+    # Throttles connections to Simbad
+    simbadlock = multiprocessing.Lock()
+    simbadtime = 0
 def main():
     import os
     import argparse
-    import multiprocessing
     # Do args & usage
     ap = argparse.ArgumentParser(description="Enrich click data with Simbad fields. "+
                                  "Takes click data as FITS file")
@@ -187,12 +197,7 @@ def main():
     # Divide input into batches
     batches = [(i,min(i+args.batchsize,args.runto))
                for i in xrange(args.skipto,args.runto,args.batchsize)]
-    # Create locks
-    # Controls write access to csv output file
-    writelock = multiprocessing.Lock()
-    # Throttles connections to Simbad
-    simbadlock = multiprocessing.Lock()
-    simbadtime = 0
+    main_init()
     # Create workers
     p = multiprocessing.Pool(args.maxprocs,initializer=winit,
                              initargs=(writelock, simbadlock,
