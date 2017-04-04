@@ -1,5 +1,7 @@
 import os
 import array
+import time
+import random
 import requests
 import cStringIO
 import index_csv
@@ -10,9 +12,10 @@ def convert_floats(radecs):
 def make_post_tbl(radecs):
     # Build IPAC table - fixed width columns:
     # http://irsa.ipac.caltech.edu/applications/DDGEN/Doc/catsearch_table_upload_restrictions.html
-    tbl = ["|      ra      |      dec     |\n|    double    |     double   |\n|     deg      |      deg     |\n|     null     |      null    |"]
+    tbl = ["|       ra      |      dec      |\n|    double     |     double    |\n|      deg      |      deg      |\n|      null     |      null     |"]
     for ra,de in radecs:
-        tbl.append(" %-14s %-14s"%(ra,de))
+        tbl.append(" %15.10f %+15.10f"%(float(ra),float(de)))
+    #tbl.append("\n")
     # Return a file-like object so requests's files argument will take it
     c = cStringIO.StringIO('\n'.join(tbl))
     return c
@@ -39,7 +42,8 @@ def parse_results(r):
     return res
 def build_and_run_query(radecs):
     c = make_post_tbl(radecs)
-    files = {'filename':('WAKKAWAKKA',c)}
+    # Use random filenames to prevent name collision?
+    files = {'filename':(str(random.random()),c)}
     data = {
         "spatial":"Upload",
         "uradius":"30",
@@ -51,11 +55,17 @@ def build_and_run_query(radecs):
     }
     r = requests.post("http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?",
                       data=data, files=files)
+    print "Results:",r.text[:1024]
     c.close()
+    if len(r.text) == 0:
+        return -1, "Empty result"
+    if r.text == ("[]"):
+        return -1, r.text
+    if r.text.startswith("[struct stat=\"ERROR\""):
+        return -1, r.text
     if r.status_code != 200:
         return r.status_code, r.text
     return r.status_code,parse_results(r.text)
-
 def query_clicks(batch):
     global writelock, irsalock, irsatime, args, indices
     # Build rows
@@ -72,21 +82,46 @@ def query_clicks(batch):
         if len(row) < 15:
             raise Exception("Malformed row %s"%(repr(row)))
         radecs.append((row[13],row[14]))
-    c, res = build_and_run_query(radecs)
-    if c != 200:
-        return c, res
-    if len(rows) != len(res):
-        print "Rowlen and reslen differ"
-        print row[0]
-        print res[0]
-        print row[-1]
-        print res[-1]
-        print radecs
-    for i in xrange(len(rows)):
-        rows[i] = "%s,%s,"%(rows[i],','.join(res[i]))
-    return c,rows
-
-def work(idxs):
+    while True:
+        irsalock.acquire()
+        step = 0.05
+        t = time.time()
+        if t < irsatime:
+            time.sleep((irsatime-t)+step)
+        elif time.time() - irsatime < step:
+            time.sleep(time.time()-irsatime)
+        irsatime = time.time()
+        irsalock.release()
+        c, res = build_and_run_query(radecs)
+        if c != 200:
+            # Error
+            if (
+                    # SQLConnect: DB probably overburdened
+                    "SQLConnect" in res or
+                    "ORA-12537: TNS:connection" in res or
+                    "Empty result" in res
+            ):
+                # Back off
+                irsalock.acquire()
+                irsatime = max(time.time()+30,irsatime+30)
+                irsalock.release()
+                continue
+            else:
+                # Unknown error
+                print res
+                return -1,res
+        if len(rows) != len(res):
+            print "Rowlen and reslen differ"
+            print res
+            print row[0]
+            print row[-1]
+            print radecs[:10]
+            print radecs[:-10]
+            return -1,res
+        for i in xrange(len(rows)):
+            rows[i] = "%s,%s,"%(rows[i],','.join(res[i]))
+        return c,rows
+def _work(idxs):
     global writelock, irsalock, irsatime, args, indices
     print "*"*40,'\n',"Running:",idxs,'\n',"*"*40
     batch = indices[idxs[0]:idxs[1]]
@@ -109,7 +144,14 @@ def work(idxs):
         of.write('\n')
     of.close()
     writelock.release()
-
+def work(*args,**kwargs):
+    try:
+        _work(*args,**kwargs)
+    except Exception,e:
+        print e
+        import traceback
+        traceback.print_exc()
+        traceback.print_tb()
 def winit(writelock_, irsalock_, irsatime_, args_, indices_):
     global writelock, irsalock, irsatime, args, indices
     writelock = writelock_
