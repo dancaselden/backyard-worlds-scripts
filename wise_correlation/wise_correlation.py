@@ -33,10 +33,11 @@ def parse_results(r):
             continue
         # Got a row
         l = l.split() # Split on one-or-more whitespace
-        if last is not None and l[0] == last[0]:
-            print "Double????"
-            print last
-            print l
+        #if last is not None and l[0] == last[0]:
+        # Expectig this now
+        #    print "Double????"
+        #    print last
+        #    print l
         last = l
         res.append(l)
     return res
@@ -50,12 +51,13 @@ def build_and_run_query(radecs):
         "uradunits":"arcsec",
         "catalog":"allwise_p3as_psd",
         "outfmt":"1",
-        "one_to_one":"1",
         "selcols":"w1mpro,w1sigmpro,w1snr,w2mpro,w2sigmpro,w2snr,w3mpro,w3sigmpro,w3snr",
     }
+    #print data
+    #print 
     r = requests.post("http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?",
                       data=data, files=files)
-    print "Results:",r.text[:1024]
+    print "Results:",r.text[:4096]
     c.close()
     if len(r.text) == 0:
         return -1, "Empty result"
@@ -110,17 +112,22 @@ def query_clicks(batch):
                 # Unknown error
                 print res
                 return -1,res
-        if len(rows) != len(res):
-            print "Rowlen and reslen differ"
-            print res
-            print row[0]
-            print row[-1]
-            print radecs[:10]
-            print radecs[:-10]
-            return -1,res
-        for i in xrange(len(rows)):
-            rows[i] = "%s,%s,"%(rows[i],','.join(res[i]))
-        return c,rows
+        #if len(rows) != len(res):
+        #    print "Rowlen and reslen differ"
+        #    print res
+        #    print row[0]
+        #    print row[-1]
+        #    print radecs[:10]
+        #    print radecs[:-10]
+        #    return -1,res
+        #for i in xrange(len(rows)):
+        #    rows[i] = "%s,%s,"%(rows[i],','.join(res[i]))
+        finalrows = []
+        for i in res:
+            idx = int(i[0])-1
+            print "IDX:",idx
+            finalrows.append("%s,%s"%(rows[idx],i))
+        return c,finalrows
 def _work(idxs):
     global writelock, irsalock, irsatime, args, indices
     print "*"*40,'\n',"Running:",idxs,'\n',"*"*40
