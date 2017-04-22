@@ -42,28 +42,46 @@ def get_cutout(ra, dec, size, band, version):
 
     # Extract fits from tar.gz
     targz = tarfile.open(fileobj=StringIO(response.content),mode='r:gz')
-    fits_file = None
+    cutouts = []
     for member in targz.getmembers():
+        print member.name
         if member.name.endswith('.fits'):
-            fits_file = targz.extractfile(member)
-            break
-    if fits_file is None:
+            cutout = targz.extractfile(member)
+            cutouts.append(cutout)
+    if len(cutouts) == 0:
         return ("Failed to extract fits file from response", 500)
 
-    # Write fits file to disk
-    inf = NamedTemporaryFile(suffix=".fits")
-    inf.write(fits_file.read())
-    del fits_file # cleanup
-    del targz
-    outf = NamedTemporaryFile(suffix=".png")
+    outfs = []
+    for cutout in cutouts:
+        # Write fits file to disk
+        inf = NamedTemporaryFile(suffix=".fits")
+        inf.write(cutout.read())
+        outf = NamedTemporaryFile(suffix=".png")
+        outfs.append(outf)
 
-    # Convert img with imagemagick
-    os.system("convert {inf} lut.png -clut -scale 500% {outf}".format(inf=inf.name,outf=outf.name))
+        # Convert img with imagemagick
+        os.system("convert '{inf}' lut.png -clut -scale 500% '{outf}'".format(inf=inf.name,outf=outf.name))
+
+        # Cleanup
+        inf.close()
+
+    # Cleanup
+    del cutouts # cleanup
+    del targz
+        
+    # Stitch images together
+    final = NamedTemporaryFile(suffix=".png")
+    os.system("convert %s +append %s"%(' '.join(["'%s'"%outf.name for outf in outfs]),
+                                       final.name))
+
 
     # Read file back to memory
-    pic = outf.read()
-    inf.close()
-    outf.close()
+    pic = final.read()
+
+    # Cleanup
+    for outf in outfs:
+        outf.close()
+    final.close()
     
     return pic,response.status_code
 
@@ -103,7 +121,7 @@ api.add_resource(Search_Page, '/search')
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0")
-    #r,sc = get_cutout(42,43,100,"1","neo2")
+    app.run(debug=False, host="0.0.0.0")
+    #r,sc = get_cutout(230.3699,24.9286,100,"1","neo2")
     #print repr(r[:100])
     
