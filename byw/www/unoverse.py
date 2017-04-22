@@ -40,11 +40,17 @@ def get_cutout(ra, dec, size, band, version):
             cutout = targz.extractfile(member)
             cutouts.append(cutout)
 
-    if len(cutouts) == 0:
+    if not cutouts:
         return ("Failed to extract fits file from response", 500)
 
     outfs = []
-    for cutout in cutouts:
+    for offset, cutout in enumerate(cutouts):
+        print offset, len(cutouts)
+        if (offset + 1) == len(cutouts):
+            command = "convert {inf} lut.png -clut -scale 500% {outf}"
+        else:
+            command = "convert {inf} lut.png -clut -scale 500% -background black -gravity East -splice 5x0+0+0 {outf}"
+
         # Write fits file to disk
         inf = NamedTemporaryFile(suffix=".fits")
         inf.write(cutout.read())
@@ -54,7 +60,7 @@ def get_cutout(ra, dec, size, band, version):
         outfs.append(outf)
 
         # Convert img with imagemagick
-        subprocess.check_output("convert {inf} lut.png -clut -scale 500% -background black -gravity East -splice 5x0+0+0 {outf}".format(inf=inf.name, outf=outf.name), shell=True)
+        subprocess.check_output(command.format(inf=inf.name, outf=outf.name), shell=True)
 
     # Stitch images together
     image = subprocess.check_output("convert -background black {0} +append -".format(" ".join([outf.name for outf in outfs])), shell=True)
