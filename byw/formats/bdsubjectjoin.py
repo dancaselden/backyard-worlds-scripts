@@ -65,7 +65,7 @@ class radecoll(list):
         if o[0] < -90:
             raise Exception("Bounding box covers a pole. Do I look like an astronomer?\n%s\n%s"%(bd,s))
         # Find left-most position
-        idx = bisect.bisect_right(self,o)
+        idx = bisect.bisect_left(self,o)
         for i in xrange(idx,len(self)):
             bd = self[i]
             if o[0] < bd[1].debot:

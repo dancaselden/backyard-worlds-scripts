@@ -1,6 +1,6 @@
 import collections
 
-AnnotationHeader = "classification_id,user_id,user_ip,subject_ids,frame,x,y"
+AnnotationHeader = "classification_id,frame,x,y,ra,de"
 Annotation = collections.namedtuple("Annotation",AnnotationHeader)
 
 class AnnotationReader:
