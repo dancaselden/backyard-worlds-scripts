@@ -70,9 +70,7 @@ def get_cutout(ra, dec, size, band, version):
     final = NamedTemporaryFile(suffix=".png")
     subprocess.check_output("convert -background black {0} +append {1}".format(" ".join([outf.name for outf in outfs]), final.name), shell=True)
 
-    # Read file back to memory
-    pic = final.read()
-    return pic, response.status_code
+    return final, response.status_code
 
 
 class Convert(Resource):
@@ -89,13 +87,11 @@ class Convert(Resource):
                                                          "neo1", "neo2"])
             args = parser.parse_args()
 
-            cutouts = []
-            cutout, status = get_cutout(args.ra, args.dec,
-                                        args.size, args.band, args.version)
+            cutout, status = get_cutout(**args)
             if status != 200:
                 return "Request failed", 500
 
-            return send_file(StringIO(cutout), mimetype="image/png")   
+            return send_file(cutout, mimetype="image/png")   
 
 
 api.add_resource(Convert, "/convert")
