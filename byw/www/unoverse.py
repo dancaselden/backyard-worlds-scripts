@@ -50,8 +50,8 @@ def get_cutout(ra, dec, size, band, version):
             cutout = targz.extractfile(member)
             data = cutout.read()
             cutout.seek(0)
-            open("/tmp/{0}".format(member.name), "w+b").write(data)
             cutouts.append(cutout)
+
     if len(cutouts) == 0:
         return ("Failed to extract fits file from response", 500)
 
