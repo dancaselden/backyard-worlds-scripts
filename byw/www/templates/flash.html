@@ -57,6 +57,7 @@
                     clearInterval(this.interval);
                     this.speed_output.text(this.speed_input.val());
                     this.interval = setInterval(this.repeat.bind(this), +this.speed_input.val());
+                    this.updateUrl();
                 }
 
                 this.updateUrl = function () {
