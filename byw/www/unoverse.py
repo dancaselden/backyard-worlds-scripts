@@ -66,26 +66,12 @@ def get_cutout(ra, dec, size, band, version):
         # Convert img with imagemagick
         subprocess.check_output("convert {inf} lut.png -clut -scale 500% {outf}".format(inf=inf.name, outf=outf.name), shell=True)
 
-        # Cleanup
-        inf.close()
-
-    # Cleanup
-    del cutouts # cleanup
-    del targz
-        
     # Stitch images together
     final = NamedTemporaryFile(suffix=".png")
     subprocess.check_output("convert -background black {0} +append {1}".format(" ".join([outf.name for outf in outfs]), final.name), shell=True)
 
     # Read file back to memory
     pic = final.read()
-
-    # Cleanup
-    for outf in outfs:
-        outf.close()
-
-    final.close()
-    
     return pic, response.status_code
 
 
