@@ -7,6 +7,18 @@
                 background-color: black;
                 padding-top: 70px;
             }
+            #locInput {
+                width: 200px;
+            }
+            #sizeInput {
+                width: 75px;
+            }
+            #bandInput {
+                width: 75px;
+            }
+            #speedInput {
+                padding-top: 8px;
+            }
             #navbar {
                 margin: auto;
             }
@@ -44,6 +56,13 @@
 
             jQuery(function () {
                 var container = jQuery("#image");
+                var speed = jQuery("#speedInput");
+                var speed_out = jQuery("#speedValue");
+
+                function updateSpeed () {
+                    console.log("...");
+                    speed_out.text(speed.val());
+                }
 
                 function repeat () {
                     container.empty();
@@ -55,6 +74,12 @@
                 jQuery("form").submit(function (e) {
                     e.preventDefault();
                 });
+
+                jQuery("#speedInput").on('input change', function () {
+                    clearInterval(timer);
+                    updateSpeed();
+                    timer = setInterval(repeat, this.value);
+                })
 
                 jQuery("#load").click(function () {
                     reset();
@@ -73,8 +98,13 @@
                         images.push(new_img);
                     })
 
-                    timer = setInterval(repeat, 1000);
-                })
+                    updateSpeed();
+                    interval = +speed.val();
+                    timer = setInterval(repeat, interval);
+                });
+
+                updateSpeed();
+
             });
         </script>
     </head>
@@ -104,6 +134,16 @@
                             </li>
                             <li>
                                 <button type="submit" class="btn btn-default" id="load">Load</button>
+                            </li>
+                            <li>
+                                <div class="form-group">
+                                    <input type="range" min="50" max="5000" value="1000" id="speedInput">
+                                </div>
+                            </li>
+                            <li>
+                                <div class="form-group">
+                                    <span id="speedValue"></span>
+                                </div>
                             </li>
                             <li>
                                 <div class="form-group">
