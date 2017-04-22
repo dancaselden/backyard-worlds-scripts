@@ -57,8 +57,8 @@
                     var size = jQuery("#sizeInput").val();
                     var band = jQuery("#bandInput").val();
 
-                    var ra = loc.split(",")[0].trim();
-                    var dec = loc.split(",")[1].trim();
+                    var ra = loc.split(/\s*,?\s*/)[0].trim();
+                    var dec = loc.split(/\s*,?\s*/)[1].trim();
 
                     versions.forEach(function (value) {
                         var new_url = url + jQuery.param({ra: ra, dec: dec, size: size, band:band, version: value});
