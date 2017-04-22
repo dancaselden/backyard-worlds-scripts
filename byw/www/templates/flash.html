@@ -11,8 +11,6 @@
                 margin: auto;
             }
             #image {
-                width: 100px;
-                height: 100px;
                 margin: auto;
                 background: gray;
             }
@@ -33,20 +31,20 @@
             var image = 0;
             var timer;
 
-            var container = jQuery("#image");
-
-            function repeat () {
-                container.empty();
-                container.append(images[image]);
-                image = (image + 1) % images.length
-            }
-
             function reset () {
                 clearInterval(timer);
                 image = 0;
             }
 
             jQuery(function () {
+                var container = jQuery("#image");
+
+                function repeat () {
+                    container.empty();
+                    container.append(images[image]);
+                    image = (image + 1) % images.length;
+                }
+
                 jQuery("form").submit(function (e) {
                     e.preventDefault();
                 });
@@ -56,20 +54,18 @@
 
                     var ra = jQuery("#raInput").val();
                     var dec = jQuery("#decInput").val();
-                    var size = jQuery("#sizeInput").val();
+                    var size = jQuery("#sizeInput").val() * 5;
                     var band = jQuery("#bandInput").val();
 
-                    console.log(ra, dec);
 
                     versions.forEach(function (value) {
                         var new_url = url + jQuery.param({ra: ra, dec: dec, size: size, band:band, version: value});
-                        console.log(new_url);
-                        var new_img = document.createElement("a");
+                        var new_img = document.createElement("img");
                         new_img.setAttribute("src", new_url);
                         images.push(new_img);
                     })
 
-                    timer = setInterval(repeat, 2000);
+                    timer = setInterval(repeat, 1000);
                 })
             });
         </script>
