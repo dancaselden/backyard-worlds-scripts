@@ -33,6 +33,7 @@
 
             function reset () {
                 clearInterval(timer);
+                images = [];
                 image = 0;
             }
 
@@ -52,11 +53,12 @@
                 jQuery("#load").click(function () {
                     reset();
 
-                    var ra = jQuery("#raInput").val();
-                    var dec = jQuery("#decInput").val();
+                    var loc = jQuery("#locInput").val();
                     var size = jQuery("#sizeInput").val();
                     var band = jQuery("#bandInput").val();
 
+                    var ra = loc.split(",")[0].trim();
+                    var dec = loc.split(",")[1].trim();
 
                     versions.forEach(function (value) {
                         var new_url = url + jQuery.param({ra: ra, dec: dec, size: size, band:band, version: value});
@@ -78,14 +80,8 @@
                         <ul class="nav navbar-nav">
                             <li>
                                 <div class="form-group">
-                                    <label for="raInput">RA</label>
-                                    <input type="text" class="form-control" id="raInput">
-                                </div>
-                            </li>
-                            <li>
-                                <div class="form-group">
-                                    <label for="decInput">Dec</label>
-                                    <input type="text" class="form-control" id="decInput">
+                                    <label for="locInput">Location</label>
+                                    <input type="text" class="form-control" id="locInput">
                                 </div>
                             </li>
                             <li>
