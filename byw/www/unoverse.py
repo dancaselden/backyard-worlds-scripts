@@ -6,6 +6,8 @@ import os
 
 from astropy.io import fits
 from flask import Flask
+from flask import make_response
+from flask import render_template
 from flask import request
 from flask import send_file
 from flask_restful import Api
@@ -107,6 +109,15 @@ class Convert(Resource):
 
 
 api.add_resource(Convert, '/convert')
+
+
+class Search_Page(Resource):
+    def get(self):
+            return make_response(render_template('flash.html'))
+
+
+api.add_resource(Search_Page, '/search')
+
 
 
 if __name__ == "__main__":
