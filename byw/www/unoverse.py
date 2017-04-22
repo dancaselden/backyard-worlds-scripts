@@ -67,10 +67,9 @@ def get_cutout(ra, dec, size, band, version):
         subprocess.check_output("convert {inf} lut.png -clut -scale 500% {outf}".format(inf=inf.name, outf=outf.name), shell=True)
 
     # Stitch images together
-    final = NamedTemporaryFile(suffix=".png")
-    subprocess.check_output("convert -background black {0} +append {1}".format(" ".join([outf.name for outf in outfs]), final.name), shell=True)
+    image = subprocess.check_output("convert -background black {0} +append -".format(" ".join([outf.name for outf in outfs])), shell=True)
 
-    return final, response.status_code
+    return StringIO(image), response.status_code
 
 
 class Convert(Resource):
