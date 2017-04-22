@@ -69,7 +69,7 @@ def get_cutout(ra, dec, size, band, version):
         
     # Stitch images together
     final = NamedTemporaryFile(suffix=".png")
-    os.system("convert %s +append %s"%(' '.join(["'%s'"%outf.name for outf in outfs]),
+    os.system("convert -background black %s +append %s"%(' '.join(["'%s'"%outf.name for outf in outfs]),
                                        final.name))
 
 
