@@ -86,9 +86,10 @@ def get_cutout(ra, dec, size, band, version):
     # Cleanup
     for outf in outfs:
         outf.close()
+
     final.close()
     
-    return pic,response.status_code
+    return pic, response.status_code
 
 class Convert(Resource):
     def get(self):

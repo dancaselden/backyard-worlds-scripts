@@ -10,6 +10,11 @@
             #navbar {
                 margin: auto;
             }
+            #navbar span {
+                font-size: 1.5em;
+                padding-left: 10px;
+                padding-top: 8x;
+            }
             #image {
                 margin: auto;
                 background: gray;
@@ -43,6 +48,7 @@
                 function repeat () {
                     container.empty();
                     container.append(images[image]);
+                    jQuery("#version").text(versions[image]);
                     image = (image + 1) % images.length;
                 }
 
@@ -98,6 +104,11 @@
                             </li>
                             <li>
                                 <button type="submit" class="btn btn-default" id="load">Load</button>
+                            </li>
+                            <li>
+                                <div class="form-group">
+                                    <span id="version"></span>
+                                </div>
                             </li>
                         </ul>
                     </form>
