@@ -48,8 +48,6 @@ def get_cutout(ra, dec, size, band, version):
         print member.name
         if member.name.endswith(".fits"):
             cutout = targz.extractfile(member)
-            data = cutout.read()
-            cutout.seek(0)
             cutouts.append(cutout)
 
     if len(cutouts) == 0:
