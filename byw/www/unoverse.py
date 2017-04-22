@@ -2,7 +2,6 @@ from StringIO import StringIO
 from tempfile import NamedTemporaryFile
 import re
 import tarfile
-import os
 import subprocess
 
 from astropy.io import fits
@@ -17,7 +16,7 @@ from flask_restful import reqparse
 
 import png
 import requests
-import numpy
+
 
 
 app = Flask(__name__)
@@ -32,6 +31,7 @@ def validate_tile(tile):
         return TILE_RE.search(tile).group(1)
     except AttributeError:
         raise ValueError("Invalid tile name")
+
 
 def get_cutout(ra, dec, size, band, version):
     # Construct URL to cutout and download
@@ -66,8 +66,7 @@ def get_cutout(ra, dec, size, band, version):
         outfs.append(outf)
 
         # Convert img with imagemagick
-        command = "convert {inf} lut.png -clut -scale 500% {outf}".format(inf=inf.name, outf=outf.name)
-        subprocess.check_output(command, shell=True)
+        subprocess.check_output("convert {inf} lut.png -clut -scale 500% {outf}".format(inf=inf.name, outf=outf.name), shell=True)
 
         # Cleanup
         inf.close()
@@ -78,7 +77,7 @@ def get_cutout(ra, dec, size, band, version):
         
     # Stitch images together
     final = NamedTemporaryFile(suffix=".png")
-    os.system("convert -background black %s +append %s"%(" ".join([outf.name for outf in outfs]), final.name))
+    subprocess.check_output("convert -background black {0} +append {1}".format(" ".join([outf.name for outf in outfs]), final.name), shell=True)
 
     # Read file back to memory
     pic = final.read()
@@ -90,6 +89,7 @@ def get_cutout(ra, dec, size, band, version):
     final.close()
     
     return pic, response.status_code
+
 
 class Convert(Resource):
     def get(self):
