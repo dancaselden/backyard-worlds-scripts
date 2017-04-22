@@ -3,6 +3,7 @@ from tempfile import NamedTemporaryFile
 import re
 import tarfile
 import os
+import subprocess
 
 from astropy.io import fits
 from flask import Flask
@@ -41,12 +42,15 @@ def get_cutout(ra, dec, size, band, version):
         return ("Request failed", 500)
 
     # Extract fits from tar.gz
-    targz = tarfile.open(fileobj=StringIO(response.content),mode='r:gz')
+    targz = tarfile.open(fileobj=StringIO(response.content), mode="r:gz")
     cutouts = []
     for member in targz.getmembers():
         print member.name
-        if member.name.endswith('.fits'):
+        if member.name.endswith(".fits"):
             cutout = targz.extractfile(member)
+            data = cutout.read()
+            cutout.seek(0)
+            open("/tmp/{0}".format(member.name), "w+b").write(data)
             cutouts.append(cutout)
     if len(cutouts) == 0:
         return ("Failed to extract fits file from response", 500)
@@ -56,11 +60,14 @@ def get_cutout(ra, dec, size, band, version):
         # Write fits file to disk
         inf = NamedTemporaryFile(suffix=".fits")
         inf.write(cutout.read())
+        inf.seek(0)
+
         outf = NamedTemporaryFile(suffix=".png")
         outfs.append(outf)
 
         # Convert img with imagemagick
-        os.system("convert '{inf}' lut.png -clut -scale 500% '{outf}'".format(inf=inf.name,outf=outf.name))
+        command = "convert {inf} lut.png -clut -scale 500% {outf}".format(inf=inf.name, outf=outf.name)
+        subprocess.check_output(command, shell=True)
 
         # Cleanup
         inf.close()
@@ -71,9 +78,7 @@ def get_cutout(ra, dec, size, band, version):
         
     # Stitch images together
     final = NamedTemporaryFile(suffix=".png")
-    os.system("convert -background black %s +append %s"%(' '.join(["'%s'"%outf.name for outf in outfs]),
-                                       final.name))
-
+    os.system("convert -background black %s +append %s"%(" ".join([outf.name for outf in outfs]), final.name))
 
     # Read file back to memory
     pic = final.read()
@@ -88,13 +93,13 @@ def get_cutout(ra, dec, size, band, version):
 class Convert(Resource):
     def get(self):
             parser = reqparse.RequestParser()
-            parser.add_argument('ra', type=float, required=True)
-            parser.add_argument('dec', type=float, required=True)
-            parser.add_argument('size', type=int, required=False,
+            parser.add_argument("ra", type=float, required=True)
+            parser.add_argument("dec", type=float, required=True)
+            parser.add_argument("size", type=int, required=False,
                                 default=100)
-            parser.add_argument('band', type=int, required=False,
+            parser.add_argument("band", type=int, required=False,
                                 default=2, choices=[1,2])
-            parser.add_argument('version', type=str, required=False,
+            parser.add_argument("version", type=str, required=False,
                                 default="neo2", choices=["allwise",
                                                          "neo1", "neo2"])
             args = parser.parse_args()
@@ -105,23 +110,23 @@ class Convert(Resource):
             if status != 200:
                 return "Request failed", 500
 
-            return send_file(StringIO(cutout), mimetype='image/png')   
+            return send_file(StringIO(cutout), mimetype="image/png")   
 
 
-api.add_resource(Convert, '/convert')
+api.add_resource(Convert, "/convert")
 
 
 class Search_Page(Resource):
     def get(self):
-            return make_response(render_template('flash.html'))
+            return make_response(render_template("flash.html"))
 
 
-api.add_resource(Search_Page, '/search')
+api.add_resource(Search_Page, "/search")
 
 
 
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0")
+    app.run(debug=True, host="0.0.0.0")
     #r,sc = get_cutout(230.3699,24.9286,100,"1","neo2")
     #print repr(r[:100])
     
