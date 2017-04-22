@@ -23,7 +23,7 @@ api = Api(app)
 PATH = "http://unwise.me/cutout_fits?file_img_m=on&version={version}&ra={ra}&dec={dec}&size={size}&bands={band}"
 
 
-def get_cutout(ra, dec, size, band, version):
+def get_cutout(ra, dec, size, band, version, brighten):
     # Construct URL to cutout and download
     url = PATH.format(ra=ra, dec=dec, size=size, band=band, version=version)
     print url
@@ -43,13 +43,22 @@ def get_cutout(ra, dec, size, band, version):
     if not cutouts:
         return ("Failed to extract fits file from response", 500)
 
+    # Build LUT
+    lutf = NamedTemporaryFile(suffix=".png")
+    command = ("convert -size 5x20 gradient:blueviolet-blue gradient:blue-cyan"+
+               " gradient:cyan-green1 gradient:green1-yellow gradient:yellow-orange"+
+               " gradient:orange-red gradient:red-black {black} -append {lutf}"
+    ).format(black=' '.join(['gradient:black-black']*brighten),
+             lutf=lutf.name)
+    subprocess.check_output(command, shell=True)
+    
     outfs = []
     for offset, cutout in enumerate(cutouts):
         print offset, len(cutouts)
         if (offset + 1) == len(cutouts):
-            command = "convert {inf} lut.png -clut -scale 500% {outf}"
+            command = "convert {inf} {lutf} -clut -scale 500% {outf}"
         else:
-            command = "convert {inf} lut.png -clut -scale 500% -background black -gravity East -splice 5x0+0+0 {outf}"
+            command = "convert {inf} {lutf} -clut -scale 500% -background black -gravity East -splice 5x0+0+0 {outf}"
 
         # Write fits file to disk
         inf = NamedTemporaryFile(suffix=".fits")
@@ -60,7 +69,7 @@ def get_cutout(ra, dec, size, band, version):
         outfs.append(outf)
 
         # Convert img with imagemagick
-        subprocess.check_output(command.format(inf=inf.name, outf=outf.name), shell=True)
+        subprocess.check_output(command.format(inf=inf.name, outf=outf.name, lutf=lutf.name), shell=True)
 
     # Stitch images together
     image = subprocess.check_output("convert -background black {0} +append -".format(" ".join([outf.name for outf in outfs])), shell=True)
@@ -77,6 +86,8 @@ class Convert(Resource):
         parser.add_argument("band", type=int, default=2, choices=[1,2])
         parser.add_argument("version", type=str, default="neo2", 
                                     choices=["allwise", "neo1", "neo2"])
+        parser.add_argument("brighten", type=int, default=64,
+                            choices=range(128)) # TODO: dammit dan
         args = parser.parse_args()
 
         cutout, status = get_cutout(**args)
