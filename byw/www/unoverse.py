@@ -1,20 +1,17 @@
 from StringIO import StringIO
 from tempfile import NamedTemporaryFile
-import re
+
 import tarfile
 import subprocess
 
-from astropy.io import fits
 from flask import Flask
 from flask import make_response
 from flask import render_template
-from flask import request
 from flask import send_file
 from flask_restful import Api
 from flask_restful import Resource
 from flask_restful import reqparse
 
-import png
 import requests
 
 
@@ -24,13 +21,6 @@ api = Api(app)
 
 
 PATH = "http://unwise.me/cutout_fits?file_img_m=on&version={version}&ra={ra}&dec={dec}&size={size}&bands={band}"
-
-
-def validate_tile(tile):
-    try:
-        return TILE_RE.search(tile).group(1)
-    except AttributeError:
-        raise ValueError("Invalid tile name")
 
 
 def get_cutout(ra, dec, size, band, version):
@@ -67,31 +57,27 @@ def get_cutout(ra, dec, size, band, version):
         subprocess.check_output("convert {inf} lut.png -clut -scale 500% {outf}".format(inf=inf.name, outf=outf.name), shell=True)
 
     # Stitch images together
-    final = NamedTemporaryFile(suffix=".png")
-    subprocess.check_output("convert -background black {0} +append {1}".format(" ".join([outf.name for outf in outfs]), final.name), shell=True)
+    image = subprocess.check_output("convert -background black {0} +append -".format(" ".join([outf.name for outf in outfs])), shell=True)
 
-    return final, response.status_code
+    return StringIO(image), response.status_code
 
 
 class Convert(Resource):
     def get(self):
-            parser = reqparse.RequestParser()
-            parser.add_argument("ra", type=float, required=True)
-            parser.add_argument("dec", type=float, required=True)
-            parser.add_argument("size", type=int, required=False,
-                                default=100)
-            parser.add_argument("band", type=int, required=False,
-                                default=2, choices=[1,2])
-            parser.add_argument("version", type=str, required=False,
-                                default="neo2", choices=["allwise",
-                                                         "neo1", "neo2"])
-            args = parser.parse_args()
+        parser = reqparse.RequestParser()
+        parser.add_argument("ra", type=float, required=True)
+        parser.add_argument("dec", type=float, required=True)
+        parser.add_argument("size", type=int, default=100)
+        parser.add_argument("band", type=int, default=2, choices=[1,2])
+        parser.add_argument("version", type=str, default="neo2", 
+                                    choices=["allwise", "neo1", "neo2"])
+        args = parser.parse_args()
 
-            cutout, status = get_cutout(**args)
-            if status != 200:
-                return "Request failed", 500
+        cutout, status = get_cutout(**args)
+        if status != 200:
+            return "Request failed", 500
 
-            return send_file(cutout, mimetype="image/png")   
+        return send_file(cutout, mimetype="image/png")   
 
 
 api.add_resource(Convert, "/convert")
@@ -99,7 +85,7 @@ api.add_resource(Convert, "/convert")
 
 class Search_Page(Resource):
     def get(self):
-            return make_response(render_template("flash.html"))
+        return make_response(render_template("flash.html"))
 
 
 api.add_resource(Search_Page, "/search")

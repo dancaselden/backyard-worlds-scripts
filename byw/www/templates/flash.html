@@ -60,7 +60,6 @@
                 var speed_out = jQuery("#speedValue");
 
                 function updateSpeed () {
-                    console.log("...");
                     speed_out.text(speed.val());
                 }
 
@@ -92,13 +91,14 @@
                     var dec = loc.split(/(?:\s*,?)\s+/)[1].trim();
 
                     versions.forEach(function (value) {
-                        var new_url = url + jQuery.param({ra: ra, dec: dec, size: size, band:band, version: value});
+                        var new_url = url + jQuery.param({ra: ra, dec: dec, size: size, band: band, version: value});
                         var new_img = document.createElement("img");
                         new_img.setAttribute("src", new_url);
                         images.push(new_img);
                     })
 
                     updateSpeed();
+                    repeat();
                     interval = +speed.val();
                     timer = setInterval(repeat, interval);
                 });
@@ -137,7 +137,7 @@
                             </li>
                             <li>
                                 <div class="form-group">
-                                    <input type="range" min="50" max="5000" value="1000" id="speedInput">
+                                    <input type="range" min="20" max="3000" value="1000" id="speedInput">
                                 </div>
                             </li>
                             <li>
