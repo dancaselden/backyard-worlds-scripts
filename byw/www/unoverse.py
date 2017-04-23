@@ -113,12 +113,12 @@ class Search_Page(Resource):
         return make_response(render_template("flash.html"))
 
 
-api.add_resource(Search_Page, "/search")
+api.add_resource(Search_Page, "/wiseview")
 
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0")
+    app.run(debug=True, host="0.0.0.0", port=80)
     #r,sc = get_cutout(230.3699,24.9286,100,"1","neo2")
     #print repr(r[:100])
     
