@@ -10,11 +10,8 @@
             #locInput {
                 width: 200px;
             }
-            #sizeInput {
-                width: 75px;
-            }
-            #bandInput {
-                width: 75px;
+            #sizeInput, #bandInput, #brightInput {
+                width: 50px;
             }
             #speedInput {
                 padding-top: 8px;
@@ -49,6 +46,7 @@
                 this.loc_input = jQuery("#locInput");
                 this.size_input = jQuery("#sizeInput");
                 this.band_input = jQuery("#bandInput");
+                this.bright_input = jQuery("#brightInput");
                 this.speed_input = jQuery("#speedInput");
                 this.speed_output = jQuery("#speedValue");
                 this.ver_output = jQuery("#verValue");
@@ -69,6 +67,7 @@
                         size: this.size_input.val(), 
                         band: this.band_input.val(), 
                         speed: this.speed_input.val(), 
+                        brighten: this.bright_input.val(),
                     });
                 }
 
@@ -83,6 +82,7 @@
                     this.size_input.val(map.size || 100);
                     this.band_input.val(map.band || 1);
                     this.speed_input.val(map.speed || 1000);
+                    this.bright_input.val(map.brighten || 64);
 
                     this.restart();
                 }
@@ -117,6 +117,7 @@
                             dec: loc_split[1], 
                             size: that.size_input.val(), 
                             band: that.band_input.val(), 
+                            brighten: that.bright_input.val(),
                             version: value
                         });
                         var new_img = document.createElement("img");
@@ -169,6 +170,12 @@
                                 <div class="form-group">
                                     <label for="bandInput">Band</label>
                                     <input type="text" class="form-control" id="bandInput" value="1">
+                                </div>
+                            </li>
+                            <li>
+                                <div class="form-group">
+                                    <label for="brightInput">Brighten</label>
+                                    <input type="text" class="form-control" id="brightInput" value="64">
                                 </div>
                             </li>
                             <li>
