@@ -23,6 +23,16 @@ api = Api(app)
 PATH = "http://unwise.me/cutout_fits?file_img_m=on&version={version}&ra={ra}&dec={dec}&size={size}&bands={band}"
 
 
+GRAD = [
+    "gradient:blueviolet-blue",
+    "gradient:blue-cyan",
+    "gradient:cyan-green1",
+    "gradient:green1-yellow",
+    "gradient:yellow-orange",
+    "gradient:orange-red",
+    "gradient:red-black",
+]
+
 def get_cutout(ra, dec, size, band, version, brighten):
     # Construct URL to cutout and download
     url = PATH.format(ra=ra, dec=dec, size=size, band=band, version=version)
@@ -45,16 +55,14 @@ def get_cutout(ra, dec, size, band, version, brighten):
 
     # Build LUT
     lutf = NamedTemporaryFile(suffix=".png")
-    command = ("convert -size 5x20 gradient:blueviolet-blue gradient:blue-cyan"+
-               " gradient:cyan-green1 gradient:green1-yellow gradient:yellow-orange"+
-               " gradient:orange-red gradient:red-black {black} -append {lutf}"
-    ).format(black=' '.join(['gradient:black-black']*brighten),
-             lutf=lutf.name)
+    command = ("convert -size 5x20 {grad} {black} -append {lutf}").format(
+        grad=" ".join(GRAD),
+        black='gradient:black-black ' * brighten, 
+        lutf=lutf.name)
     subprocess.check_output(command, shell=True)
     
     outfs = []
     for offset, cutout in enumerate(cutouts):
-        print offset, len(cutouts)
         if (offset + 1) == len(cutouts):
             command = "convert {inf} {lutf} -clut -scale 500% {outf}"
         else:
