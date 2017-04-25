@@ -95,7 +95,7 @@ class Convert(Resource):
         parser.add_argument("version", type=str, default="neo2", 
                                     choices=["allwise", "neo1", "neo2"])
         parser.add_argument("brighten", type=int, default=64,
-                            choices=range(128)) # TODO: dammit dan
+                            choices=range(1024)) # TODO: dammit dan
         args = parser.parse_args()
 
         cutout, status = get_cutout(**args)
@@ -118,7 +118,7 @@ api.add_resource(Search_Page, "/wiseview")
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=80)
+    app.run(debug=True, host="0.0.0.0")
     #r,sc = get_cutout(230.3699,24.9286,100,"1","neo2")
     #print repr(r[:100])
     
