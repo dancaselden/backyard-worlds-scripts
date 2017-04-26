@@ -11,6 +11,7 @@ from flask import send_file
 from flask_restful import Api
 from flask_restful import Resource
 from flask_restful import reqparse
+from flask_restful import inputs
 
 import requests
 
@@ -98,7 +99,8 @@ class Convert(Resource):
                                     choices=["allwise", "neo1", "neo2"])
         parser.add_argument("brighten", type=int, default=0,
                             choices=range(1028)) # TODO: dammit dan
-        parser.add_argument("equalize", type=bool, default=True)
+        parser.add_argument("equalize", type=inputs.boolean,
+                            default=True)
         args = parser.parse_args()
 
         cutout, status = get_cutout(**args)

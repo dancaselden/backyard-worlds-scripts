@@ -69,7 +69,7 @@
                         band: this.band_input.val(), 
                         speed: this.speed_input.val(), 
                         brighten: this.bright_input.val(),
-                        equalize: this.equalize_input.val(), 
+                        equalize: this.equalize_input.prop("checked"), 
                     });
                 }
 
@@ -83,7 +83,11 @@
                     this.loc_input.val((map.ra || "") + " " + (map.dec || ""));
                     this.size_input.val(map.size || 100);
                     this.band_input.val(map.band || 1);
-                    this.equalize_input.val(map.equalize || 1);
+	            if ('equalize' in map) {
+                        this.equalize_input.prop("checked", map.equalize == 'true');
+	            } else {
+                        this.equalize_input.prop("checked", true);
+	            }
                     this.speed_input.val(map.speed || 1000);
                     this.bright_input.val(map.brighten || 64);
 
@@ -120,7 +124,7 @@
                             dec: loc_split[1], 
                             size: that.size_input.val(), 
                             band: that.band_input.val(), 
-                            equalize: that.equalize_input.val(), 
+                            equalize: that.equalize_input.prop("checked"), 
                             brighten: that.bright_input.val(),
                             version: value
                         });
