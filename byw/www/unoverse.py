@@ -33,7 +33,7 @@ GRAD = [
     "gradient:red-black",
 ]
 
-def get_cutout(ra, dec, size, band, version, brighten):
+def get_cutout(ra, dec, size, band, version, brighten, equalize):
     # Construct URL to cutout and download
     url = PATH.format(ra=ra, dec=dec, size=size, band=band, version=version)
     print url
@@ -60,13 +60,15 @@ def get_cutout(ra, dec, size, band, version, brighten):
         black='gradient:black-black ' * brighten, 
         lutf=lutf.name)
     subprocess.check_output(command, shell=True)
-    
+
+    # Equalize or no?
+    eql = "-equalize" if equalize else ""
     outfs = []
     for offset, cutout in enumerate(cutouts):
         if (offset + 1) == len(cutouts):
-            command = "convert {inf} {lutf} -clut -scale 500% {outf}"
+            command = "convert {inf} {eql} {lutf} -clut -scale 500% {outf}"
         else:
-            command = "convert {inf} {lutf} -clut -scale 500% -background black -gravity East -splice 5x0+0+0 {outf}"
+            command = "convert {inf} {eql} {lutf} -clut -scale 500% -background black -gravity East -splice 5x0+0+0 {outf}"
 
         # Write fits file to disk
         inf = NamedTemporaryFile(suffix=".fits")
@@ -77,7 +79,7 @@ def get_cutout(ra, dec, size, band, version, brighten):
         outfs.append(outf)
 
         # Convert img with imagemagick
-        subprocess.check_output(command.format(inf=inf.name, outf=outf.name, lutf=lutf.name), shell=True)
+        subprocess.check_output(command.format(inf=inf.name, outf=outf.name, lutf=lutf.name, eql=eql), shell=True)
 
     # Stitch images together
     image = subprocess.check_output("convert -background black {0} +append -".format(" ".join([outf.name for outf in outfs])), shell=True)
@@ -94,8 +96,9 @@ class Convert(Resource):
         parser.add_argument("band", type=int, default=2, choices=[1,2])
         parser.add_argument("version", type=str, default="neo2", 
                                     choices=["allwise", "neo1", "neo2"])
-        parser.add_argument("brighten", type=int, default=64,
-                            choices=range(1024)) # TODO: dammit dan
+        parser.add_argument("brighten", type=int, default=0,
+                            choices=range(1028)) # TODO: dammit dan
+        parser.add_argument("equalize", type=bool, default=True)
         args = parser.parse_args()
 
         cutout, status = get_cutout(**args)
