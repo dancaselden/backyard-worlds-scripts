@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
         <style type="text/css">
-            body {
+            html, body {
+                margin: 0;
+                padding: 0;
                 background-color: black;
-                padding-top: 70px;
+                color: white;
             }
             canvas {
                 image-rendering: optimizeSpeed;            
@@ -15,37 +16,50 @@
                 image-rendering: pixelated;                
                 -ms-interpolation-mode: nearest-neighbor;  
             }
-            input[type="range"] {
-                width: 60px;
-                padding-top: 8px;
+            hr { 
+                margin: 25px 0;
+                background-color: #777; 
+                height: 1px; 
+                border: 0; 
             }
+            label {
+                display: block;
+            }
+
+            #nav-left {
+                padding-top: 5px;
+                background-color: #383838;
+                position: fixed;
+                height: 100%;
+                width: 250px;
+            }
+            #nav-left + div {
+                padding-left: 300px;
+            }
+
             #locInput {
                 width: 200px;
             }
             #sizeInput, #bandInput, #brightInput {
                 width: 50px;
             }
-            #navbar {
-                margin: auto;
+            #verValue {
+                margin: 0;
+                font-size: 2em;
+                font-weight: bold
             }
-            #navbar span {
-                font-size: 1.5em;
-                padding-left: 10px;
-                padding-top: 8x;
+            .row {
+                padding: 5px 15px;
+                width: 100%;
             }
-            #image {
-                margin: auto;
+            .inline {
+                float: left;
+                margin-right: 10px;
             }
-            #navbar ul {
-                padding-top: 8px;
-                color: white;
-            }
-            .navbar-nav li {
-                padding-right: 15px;
-            }
+
         </style>
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script> 
-        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+
         <script>
             var url = "/convert?";
             var versions = ["allwise", "neo1", "neo2"];
@@ -181,76 +195,45 @@
                     ws.fromUrl();
                 }
 
-                jQuery("#load").click(ws.restart.bind(ws));
+                jQuery("#locInput, #sizeInput, #bandInput, #brightInput").on("input", ws.restart.bind(ws));
                 jQuery("#speedInput").on('input change', ws.updateSpeed.bind(ws));
                 jQuery("#zoomInput").on('input change', ws.updateZoom.bind(ws));
             });
         </script>
     </head>
     <body>
-        <nav class="navbar navbar-inverse navbar-fixed-top">
-            <div class="container">
-                <div id="navbar" class="collapse navbar-collapse">
-                    <form class="form-inline" id="nosubmit">
-                        <ul class="nav navbar-nav">
-                            <li>
-                                <div class="form-group">
-                                    <label for="locInput">Location</label>
-                                    <input type="text" class="form-control" id="locInput">
-                                </div>
-                            </li>
-                            <li>
-                                <div class="form-group">
-                                    <label for="sizeInput">Size</label>
-                                    <input type="text" class="form-control" id="sizeInput" value="100">
-                                </div>
-                            </li>
-                            <li>
-                                <div class="form-group">
-                                    <label for="bandInput">Band</label>
-                                    <input type="text" class="form-control" id="bandInput" value="1">
-                                </div>
-                            </li>
-                            <li>
-                                <div class="form-group">
-                                    <label for="brightInput">Brighten</label>
-                                    <input type="text" class="form-control" id="brightInput" value="64">
-                                </div>
-                            </li>
-                            <li>
-                                <button type="submit" class="btn btn-default" id="load">Load</button>
-                            </li>
-                            <li>
-                                <div class="form-group">
-                                    <input type="range" min="20" max="3000" value="1000" id="speedInput">
-                                </div>
-                            </li>
-                            <li>
-                                <div class="form-group">
-                                    <span id="speedValue"></span>
-                                </div>
-                            </li>
-                            <li>
-                                <div class="form-group">
-                                    <input type="range" min="1" max="10" value="5" id="zoomInput">
-                                </div>
-                            </li>
-                            <li>
-                                <div class="form-group">
-                                    <span id="zoomValue"></span>
-                                </div>
-                            </li>
-                            <li>
-                                <div class="form-group">
-                                    <span id="verValue"></span>
-                                </div>
-                            </li>
-                        </ul>
-                    </form>
+        <div id="nav-left">
+            <div class="row">
+                <label for="locInput">Location</label>
+                <input type="text" id="locInput">
+            </div>
+            <div class="row">
+                <div class="inline">
+                    <label for="sizeInput">Size</label>
+                    <input type="text" id="sizeInput" value="100">
+                </div>
+                <div class="inline">
+                    <label for="bandInput">Band</label>
+                    <input type="text" id="bandInput" value="1">
+                </div>
+                <div>
+                    <label for="brightInput">Brighten</label>
+                    <input type="text" id="brightInput" value="64">
                 </div>
             </div>
-        </nav>
-        <div class="container">
+            <hr>
+            <div class="row">
+                <label for="speedInput">Speed (<span id="speedValue"></span>)</label>
+                <input type="range" min="20" max="3000" value="1000" id="speedInput">
+            </div>
+            <div class="row">
+                <label for="speedInput">Zoom (<span id="zoomValue"></span>)</label>
+                <input type="range" min="1" max="10" value="5" id="zoomInput">
+            </div>
+        </div>
+        
+        <div class="row">
+            <p id="verValue">Survey Name</p>
             <div id="image">
                 <canvas id="daCanvas" width="100" height="100"></canvas>
             </div>
