@@ -124,9 +124,9 @@ def get_cutout(ra, dec, size, band, version, brighten, equalize):
     outfs = []
     for offset, cutout in enumerate(cutouts):
         if (offset + 1) == len(cutouts):
-            command = "convert {inf} {eql} {lutf} -clut -scale 500% {outf}"
+            command = "convert {inf} {eql} {lutf} -clut {outf}"
         else:
-            command = "convert {inf} {eql} {lutf} -clut -scale 500% -background black -gravity East -splice 5x0+0+0 {outf}"
+            command = "convert {inf} {eql} {lutf} -clut -background black -gravity East -splice 5x0+0+0 {outf}"
 
         # Write fits file to disk
         inf = NamedTemporaryFile(suffix=".fits")

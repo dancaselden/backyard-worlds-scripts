@@ -7,14 +7,23 @@
                 background-color: black;
                 padding-top: 70px;
             }
+            canvas {
+                image-rendering: optimizeSpeed;            
+                image-rendering: -moz-crisp-edges;         
+                image-rendering: -webkit-optimize-contrast;
+                image-rendering: -o-crisp-edges;           
+                image-rendering: pixelated;                
+                -ms-interpolation-mode: nearest-neighbor;  
+            }
+            input[type="range"] {
+                width: 60px;
+                padding-top: 8px;
+            }
             #locInput {
                 width: 200px;
             }
             #sizeInput, #bandInput, #brightInput {
                 width: 50px;
-            }
-            #speedInput {
-                padding-top: 8px;
             }
             #navbar {
                 margin: auto;
@@ -38,7 +47,7 @@
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script> 
         <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
         <script>
-            var url = "/convert?"
+            var url = "/convert?";
             var versions = ["allwise", "neo1", "neo2"];
 
             function WiseSwapper () {
@@ -50,14 +59,19 @@
                 this.bright_input = jQuery("#brightInput");
                 this.speed_input = jQuery("#speedInput");
                 this.speed_output = jQuery("#speedValue");
+                this.zoom_input = jQuery("#zoomInput");
+                this.zoom_output = jQuery("#zoomValue");
                 this.ver_output = jQuery("#verValue");
+                this.canvas = jQuery("#daCanvas");
+                this.context = this.canvas.get(0).getContext("2d");
+
 
                 this.updateSpeed = function () {
                     clearInterval(this.interval);
                     this.speed_output.text(this.speed_input.val());
-                    this.interval = setInterval(this.repeat.bind(this), +this.speed_input.val());
+                    this.interval = setInterval(this.frame.bind(this), +this.speed_input.val());
                     this.updateUrl();
-                }
+                };
 
                 this.updateUrl = function () {
                     var loc_split = this.parseLoc();
@@ -69,9 +83,23 @@
                         band: this.band_input.val(), 
                         speed: this.speed_input.val(), 
                         brighten: this.bright_input.val(),
+                        zoom: this.zoom_input.val(),
                         equalize: this.equalize_input.prop("checked"), 
                     });
-                }
+                };
+
+                this.updateZoom = function () {
+                    this.zoom_output.text((this.zoom_input.val() * 100) + "%");
+
+                    var size = this.size_input.val();
+                    this.canvas.attr("width", size).attr("height", size);
+
+                    var zoom = this.zoom_input.val();
+                    this.canvas.css("height", size * zoom).css("width", size * zoom);
+
+                    this.updateUrl();
+                    this.draw();
+                };
 
                 this.fromUrl = function () {
                     var raw = window.location.hash.substr(1);
@@ -90,27 +118,36 @@
 	            }
                     this.speed_input.val(map.speed || 1000);
                     this.bright_input.val(map.brighten || 64);
+                    this.zoom_input.val(map.zoom || 5);
 
                     this.restart();
-                }
+                };
 
                 this.parseLoc = function () {
                     var loc_split = this.loc_input.val().split(/(?:\s*,?)\s+/);
-                    return [loc_split[0].trim(), loc_split[1].trim()]
-                }
+                    return [loc_split[0].trim(), loc_split[1].trim()];
+                };
 
                 this.reset = function () {
                     clearInterval(this.interval);
                     this.images = [];
                     this.cur_img = 0;
-                }
+                };
 
-                this.repeat = function () {
-                    this.container.empty();
-                    this.container.append(this.images[this.cur_img]);
+                this.advance = function () {
                     this.ver_output.text(versions[this.cur_img]);
                     this.cur_img = (this.cur_img + 1) % this.images.length;
-                }
+                };
+
+                this.draw = function () {
+                    var image = this.images[this.cur_img];
+                    this.context.drawImage(image, 0, 0);
+                };
+
+                this.frame = function () {
+                    this.advance();
+                    this.draw();
+                };
 
                 this.restart = function () {
                     this.reset();
@@ -126,17 +163,19 @@
                             band: that.band_input.val(), 
                             equalize: that.equalize_input.prop("checked"), 
                             brighten: that.bright_input.val(),
-                            version: value
+                            zoom: that.zoom_input.val(),
+                            version: value,
                         });
                         var new_img = document.createElement("img");
                         new_img.setAttribute("src", new_url);
                         that.images.push(new_img);
                     });
 
+                    this.updateZoom();
                     this.updateUrl();
                     this.updateSpeed();
-                    this.repeat();
-                }
+                    this.draw();
+                };
             }
 
             jQuery(function () {
@@ -152,7 +191,7 @@
 
                 jQuery("#load").click(ws.restart.bind(ws));
                 jQuery("#speedInput").on('input change', ws.updateSpeed.bind(ws));
-
+                jQuery("#zoomInput").on('input change', ws.updateZoom.bind(ws));
             });
         </script>
     </head>
@@ -207,6 +246,16 @@
                             </li>
                             <li>
                                 <div class="form-group">
+                                    <input type="range" min="1" max="10" value="5" id="zoomInput">
+                                </div>
+                            </li>
+                            <li>
+                                <div class="form-group">
+                                    <span id="zoomValue"></span>
+                                </div>
+                            </li>
+                            <li>
+                                <div class="form-group">
                                     <span id="verValue"></span>
                                 </div>
                             </li>
@@ -216,7 +265,9 @@
             </div>
         </nav>
         <div class="container">
-            <div id="image"></div>
+            <div id="image">
+                <canvas id="daCanvas" width="100" height="100"></canvas>
+            </div>
         </div>
     </body>
 </html>
