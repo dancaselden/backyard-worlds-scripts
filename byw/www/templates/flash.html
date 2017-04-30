@@ -55,6 +55,7 @@
                 this.loc_input = jQuery("#locInput");
                 this.size_input = jQuery("#sizeInput");
                 this.band_input = jQuery("#bandInput");
+                this.equalize_input = jQuery("#equalizeInput");
                 this.bright_input = jQuery("#brightInput");
                 this.speed_input = jQuery("#speedInput");
                 this.speed_output = jQuery("#speedValue");
@@ -83,6 +84,7 @@
                         speed: this.speed_input.val(), 
                         brighten: this.bright_input.val(),
                         zoom: this.zoom_input.val(),
+                        equalize: this.equalize_input.prop("checked"), 
                     });
                 };
 
@@ -109,6 +111,11 @@
                     this.loc_input.val((map.ra || "") + " " + (map.dec || ""));
                     this.size_input.val(map.size || 100);
                     this.band_input.val(map.band || 1);
+	            if ('equalize' in map) {
+                        this.equalize_input.prop("checked", map.equalize == 'true');
+	            } else {
+                        this.equalize_input.prop("checked", true);
+	            }
                     this.speed_input.val(map.speed || 1000);
                     this.bright_input.val(map.brighten || 64);
                     this.zoom_input.val(map.zoom || 5);
@@ -154,6 +161,7 @@
                             dec: loc_split[1], 
                             size: that.size_input.val(), 
                             band: that.band_input.val(), 
+                            equalize: that.equalize_input.prop("checked"), 
                             brighten: that.bright_input.val(),
                             zoom: that.zoom_input.val(),
                             version: value,
@@ -215,6 +223,12 @@
                                 <div class="form-group">
                                     <label for="brightInput">Brighten</label>
                                     <input type="text" class="form-control" id="brightInput" value="64">
+                                </div>
+                            </li>
+			    <li>
+                                <div class="form-group">
+                                    <label for="equalizeInput">Eq</label>
+                                    <input type="checkbox" class="form-control" id="equalizeInput" checked>
                                 </div>
                             </li>
                             <li>
