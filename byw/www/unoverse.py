@@ -1,7 +1,9 @@
 from StringIO import StringIO
 from tempfile import NamedTemporaryFile
 
+import csv
 import tarfile
+import urllib
 import subprocess
 
 from flask import Flask
@@ -91,6 +93,7 @@ def get_cutouts(ra, dec, size, band, version, brighten, equalize):
 
     return StringIO(image), response.status_code
 
+
 def get_cutout(ra, dec, size, band, version, brighten, equalize):
     # Construct URL to cutout and download
     url = PATH.format(ra=ra, dec=dec, size=size, band=band, version=version)
@@ -173,6 +176,44 @@ class Convert(Resource):
 api.add_resource(Convert, "/convert")
 
 
+class Pawnstars_Composite(Resource):
+    def get(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument("ra", type=float, required=True)
+        parser.add_argument("dec", type=float, required=True)
+        args = parser.parse_args()
+
+        response = requests.get("http://ps1images.stsci.edu/cgi-bin/ps1filenames.py", params={
+            "RA": args.ra,
+            "DEC": args.dec,
+            "filters": "giy",
+            "sep": "comma"
+        })
+
+        files = {}
+        reader = csv.DictReader(StringIO(response.content))
+        for row in reader:
+            files[row["filter"]] = row["filename"]
+
+        url = "http://ps1images.stsci.edu/cgi-bin/fitscut.cgi?" + urllib.urlencode({
+            "red": files["y"],
+            "green": files["i"],
+            "blue": files["g"],
+            "x": args.ra,
+            "y": args.dec,
+            "size": 60,
+            "wcs": 1,
+            "asinh": True,
+            "autoscale": 99.75,
+            "output_size": 512
+        })
+        return url
+
+
+api.add_resource(Pawnstars_Composite, "/pawnstars")
+
+
+
 class Search_Page(Resource):
     def get(self):
         return make_response(render_template("flash.html"))
@@ -184,6 +225,5 @@ api.add_resource(Search_Page, "/wiseview")
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0")
-    #r,sc = get_cutout(230.3699,24.9286,100,"1","neo2")
-    #print repr(r[:100])
+
     
