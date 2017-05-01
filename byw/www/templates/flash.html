@@ -108,11 +108,15 @@
                 this.updateZoom = function () {
                     this.zoom_output.text((this.zoom_input.val() * 100) + "%");
 
+                    if (!this.real_img_size) {
+                        return;
+                    }
+
                     var size = this.size_input.val();
-                    this.canvas.attr("width", size).attr("height", size);
+                    this.canvas.attr("width", this.real_img_size[0]).attr("height", this.real_img_size[1]);
 
                     var zoom = this.zoom_input.val();
-                    this.canvas.css("height", size * zoom).css("width", size * zoom);
+                    this.canvas.css("width", this.real_img_size[0] * zoom).css("height", this.real_img_size[1] * zoom);
 
                     this.updateUrl();
                     this.draw();
@@ -191,6 +195,10 @@
                         });
                         var new_img = document.createElement("img");
                         new_img.setAttribute("src", new_url);
+                        jQuery(new_img).on("load", function () {
+                            that.real_img_size = [this.width, this.height];
+                            that.updateZoom();
+                        });
                         that.images.push(new_img);
                     });
 
@@ -223,24 +231,24 @@
         <div id="nav-left">
             <div class="row">
                 <label for="locInput">Location</label>
-                <input type="text" id="locInput">
+                <input type="text" class="resetters" id="locInput">
             </div>
             <div class="row">
                 <div class="inline">
                     <label for="sizeInput">Size</label>
-                    <input type="text" id="sizeInput" value="100">
+                    <input type="text" class="resetters" id="sizeInput" value="100">
                 </div>
                 <div class="inline">
                     <label for="bandInput">Band</label>
-                    <input type="text" id="bandInput" value="1">
+                    <input type="text" class="resetters" id="bandInput" value="1">
                 </div>
                 <div class="inline">
                     <label for="brightInput">Brighten</label>
-                    <input type="text" id="brightInput" value="64">
+                    <input type="text" class="resetters" id="brightInput" value="64">
                 </div>
                 <div>
                     <label for="equalizeInput">Eq</label>
-                    <input type="checkbox" id="equalizeInput" checked>
+                    <input type="checkbox" class="resetters" id="equalizeInput" checked>
                 </div>
             </div>
             <hr>

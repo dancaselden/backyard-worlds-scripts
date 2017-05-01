@@ -36,50 +36,83 @@ GRAD = [
     "gradient:red-black",
 ]
 
+
+# input fits img data, receive png data
+def convert_img(file_data, equalize=False, lutf="", right_pad=False):
+    inf = NamedTemporaryFile(suffix=".fits")
+    inf.write(file_data)
+    inf.seek(0)
+
+    tmp = None
+    if lutf:
+        tmp = NamedTemporaryFile(suffix=".png")
+        tmp.write(lutf)
+        tmp.seek(0)
+        lutf = "{0} -clut".format(tmp.name)
+
+    eql = "-equalize" if equalize else ""
+    pad = "-background black -gravity East -splice 5x0+0+0" if right_pad else ""
+    command = "convert {inf} {eql} {lutf} {pad} png:-".format(inf=inf.name, eql=eql, lutf=lutf, pad=pad)
+    return subprocess.check_output(command, shell=True)
+
+
+def merge_imgs(file_datas, suffix=".png"):
+    temp_files = []
+    for file_data in file_datas:
+        inf = NamedTemporaryFile(suffix=suffix)
+        inf.write(file_data)
+        inf.seek(0)  
+        temp_files.append(inf)
+
+    joined_names = " ".join(map(lambda f: f.name, temp_files))
+    command = "convert -background black {imgs} +append png:-".format(imgs=joined_names)
+    return subprocess.check_output(command, shell=True)
+
+
+def create_lut(gradient=GRAD, brighten=0):
+    command = "convert -size 5x20 {grad} {black} -append png:-".format(
+        grad=" ".join(gradient),
+        black='gradient:black-black ' * brighten)
+    return subprocess.check_output(command, shell=True)
+
+
+def find_tar_fits(tar_data):
+    targz = tarfile.open(fileobj=StringIO(tar_data), mode="r:gz")
+    fits_files = []
+    for member in targz.getmembers():
+        if member.name.endswith(".fits"):
+            cutout = targz.extractfile(member)
+            fits_files.append(cutout)  
+    return fits_files
+
+
+def request_cutouts(ra, dec, size, band, version):
+    url = PATH.format(ra=ra, dec=dec, size=size, band=band, version=version)
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise Exception("Invalid response")
+
+    cutouts = find_tar_fits(response.content)
+    if not cutouts:
+        raise Exception("No fits files found")
+
+    return cutouts
+
+
 def get_cutouts(ra, dec, size, band, version, brighten, equalize):
     images = []
     for band in (1,2):
-        # Construct URL to cutout and download
-        url = PATH.format(ra=ra, dec=dec, size=size, band=band, version=version)
-        print url
-        response = requests.get(url)
-        if response.status_code != 200:
-            return ("Request failed", 500)
+        try:
+            cutouts = request_cutouts(ra, dec, size, band, version)
+        except Exception as e:
+            return "Error: {0}".format(str(e)), 500
 
-        # Extract fits from tar.gz
-        targz = tarfile.open(fileobj=StringIO(response.content), mode="r:gz")
-        cutouts = []
-        for member in targz.getmembers():
-            print member.name
-            if member.name.endswith(".fits"):
-                cutout = targz.extractfile(member)
-                cutouts.append(cutout)
-
-        if not cutouts:
-            return ("Failed to extract fits file from response", 500)
-
-        # Equalize or no?
-        eql = "-equalize" if equalize else ""
-        outfs = []
+        converted = []
         for offset, cutout in enumerate(cutouts):
-            if (offset + 1) == len(cutouts):
-                command = "convert {inf} {eql} -scale 500% {outf}"
-            else:
-                command = "convert {inf} {eql} -scale 500% -background black -gravity East -splice 5x0+0+0 {outf}"
+            pad = offset != len(cutouts)
+            converted.append(convert_img(cutout.read(), equalize=equalize, right_pad=pad))
 
-            # Write fits file to disk
-            inf = NamedTemporaryFile(suffix=".fits")
-            inf.write(cutout.read())
-            inf.seek(0)
-
-            outf = NamedTemporaryFile(suffix=".png")
-            outfs.append(outf)
-
-            # Convert img with imagemagick
-            subprocess.check_output(command.format(inf=inf.name, outf=outf.name, eql=eql), shell=True)
-
-        # Stitch images together
-        images.append(subprocess.check_output("convert -background black {0} +append -".format(" ".join([outf.name for outf in outfs])), shell=True))
+        images.append(merge_imgs(converted))
 
     infs = []
     for image in images:
@@ -91,61 +124,25 @@ def get_cutouts(ra, dec, size, band, version, brighten, equalize):
     cmd = "convert {inf2} {inf1} -background black -channel RB -combine -".format(inf1=infs[0].name,inf2=infs[1].name)
     image = subprocess.check_output(cmd,shell=True)
 
-    return StringIO(image), response.status_code
+    return StringIO(image), 200
 
 
 def get_cutout(ra, dec, size, band, version, brighten, equalize):
-    # Construct URL to cutout and download
-    url = PATH.format(ra=ra, dec=dec, size=size, band=band, version=version)
-    print url
-    response = requests.get(url)
-    if response.status_code != 200:
-        return ("Request failed", 500)
+    lut = create_lut(brighten=brighten)
 
-    # Extract fits from tar.gz
-    targz = tarfile.open(fileobj=StringIO(response.content), mode="r:gz")
-    cutouts = []
-    for member in targz.getmembers():
-        print member.name
-        if member.name.endswith(".fits"):
-            cutout = targz.extractfile(member)
-            cutouts.append(cutout)
+    try:
+        cutouts = request_cutouts(ra, dec, size, band, version)
+    except Exception as e:
+        return "Error: {0}".format(str(e)), 500
 
-    if not cutouts:
-        return ("Failed to extract fits file from response", 500)
-
-    # Build LUT
-    lutf = NamedTemporaryFile(suffix=".png")
-    command = ("convert -size 5x20 {grad} {black} -append {lutf}").format(
-        grad=" ".join(GRAD),
-        black='gradient:black-black ' * brighten, 
-        lutf=lutf.name)
-    subprocess.check_output(command, shell=True)
-
-    # Equalize or no?
-    eql = "-equalize" if equalize else ""
-    outfs = []
+    converted = []
     for offset, cutout in enumerate(cutouts):
-        if (offset + 1) == len(cutouts):
-            command = "convert {inf} {eql} {lutf} -clut {outf}"
-        else:
-            command = "convert {inf} {eql} {lutf} -clut -background black -gravity East -splice 5x0+0+0 {outf}"
+        pad = offset != (len(cutouts) - 1)
+        converted.append(convert_img(cutout.read(), equalize=equalize, lutf=lut, right_pad=pad))
 
-        # Write fits file to disk
-        inf = NamedTemporaryFile(suffix=".fits")
-        inf.write(cutout.read())
-        inf.seek(0)
+    image = merge_imgs(converted)
 
-        outf = NamedTemporaryFile(suffix=".png")
-        outfs.append(outf)
-
-        # Convert img with imagemagick
-        subprocess.check_output(command.format(inf=inf.name, outf=outf.name, lutf=lutf.name, eql=eql), shell=True)
-
-    # Stitch images together
-    image = subprocess.check_output("convert -background black {0} +append -".format(" ".join([outf.name for outf in outfs])), shell=True)
-
-    return StringIO(image), response.status_code
+    return StringIO(image), 200
 
 
 class Convert(Resource):
