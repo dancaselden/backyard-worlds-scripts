@@ -178,6 +178,7 @@ class Pawnstars_Composite(Resource):
         parser = reqparse.RequestParser()
         parser.add_argument("ra", type=float, required=True)
         parser.add_argument("dec", type=float, required=True)
+        parser.add_argument("size", type=int, required=True)
         args = parser.parse_args()
 
         response = requests.get("http://ps1images.stsci.edu/cgi-bin/ps1filenames.py", params={
@@ -198,11 +199,11 @@ class Pawnstars_Composite(Resource):
             "blue": files["g"],
             "x": args.ra,
             "y": args.dec,
-            "size": 60,
+            "size": args.size,
             "wcs": 1,
             "asinh": True,
             "autoscale": 99.75,
-            "output_size": 512
+            "output_size": 256
         })
         return url
 
