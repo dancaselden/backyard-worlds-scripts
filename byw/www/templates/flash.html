@@ -125,7 +125,11 @@
                 this.updatePawnstars = function () {
                     var loc_split = this.parseLoc();
 
-                    jQuery.getJSON("/pawnstars", {"ra": loc_split[0], "dec": loc_split[1]}, function (response) {
+                    jQuery.getJSON("/pawnstars", {
+	                "ra": loc_split[0],
+                        "dec": loc_split[1],
+                        "size": this.size_input.val()*4 // arcseconds to pixels
+	            }, function (response) {
                         var new_img = document.createElement("img");
                         new_img.setAttribute("src", response)
                         jQuery("#pawnstars").empty().append(new_img);
@@ -186,7 +190,7 @@
                         var new_url = url + jQuery.param({
                             ra: loc_split[0], 
                             dec: loc_split[1], 
-                            size: that.size_input.val(), 
+                            size: (~~(that.size_input.val()/1.375)), // Convert arcseconds to pixels
                             band: that.band_input.val(), 
                             equalize: that.equalize_input.prop("checked"), 
                             brighten: that.bright_input.val(),
