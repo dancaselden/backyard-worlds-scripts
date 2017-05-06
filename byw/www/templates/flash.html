@@ -166,8 +166,8 @@
                 };
 
                 this.advance = function () {
-                    this.ver_output.text(versions[this.cur_img]);
                     this.cur_img = (this.cur_img + 1) % this.images.length;
+                    this.ver_output.text(versions[this.cur_img]);
                 };
 
                 this.draw = function () {
