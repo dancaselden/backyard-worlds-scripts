@@ -5,6 +5,7 @@ import csv
 import tarfile
 import urllib
 import subprocess
+import json
 
 from flask import Flask
 from flask import make_response
@@ -16,6 +17,9 @@ from flask_restful import reqparse
 from flask_restful import inputs
 
 import requests
+
+import byw.www.xref as xref
+import byw.common.radetree as radetree
 
 
 
@@ -36,6 +40,7 @@ GRAD = [
     "gradient:red-black",
 ]
 
+SUBJECTS, RDTREE = xref.read_cache("wsubcache.csv")
 
 # input fits img data, receive png data
 def convert_img(file_data, equalize=False, lutf="", right_pad=False):
@@ -218,6 +223,22 @@ class Search_Page(Resource):
 
 
 api.add_resource(Search_Page, "/wiseview")
+
+
+
+class Xref_Page(Resource):
+    def get(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument("ra", type=float, required=True)
+        parser.add_argument("dec", type=float, required=True)
+        args = parser.parse_args()
+
+        subs = RDTREE.in_objs(radetree.Point(None,args.ra,args.dec))
+
+        return ','.join([str(s.entry.subject_id) for s in subs])
+
+
+api.add_resource(Xref_Page, "/xref")
 
 
 
