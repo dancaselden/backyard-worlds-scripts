@@ -207,7 +207,7 @@ class Pawnstars_Composite(Resource):
             "size": args.size,
             "wcs": 1,
             "asinh": True,
-            "autoscale": 99.75,
+            "autoscale": 98.00,
             "output_size": 256
         })
         return url
