@@ -79,7 +79,7 @@ def merge_imgs(file_datas, suffix=".png"):
 
 
 def create_lut(gradient=GRAD, brighten=0, color=True):
-    if color:
+    if not color:
         gradient = GREY
     command = "convert -size 5x20 {grad} {black} -append png:-".format(
         grad=" ".join(gradient),
@@ -110,7 +110,7 @@ def request_cutouts(ra, dec, size, band, version):
     return cutouts
 
 
-def get_cutouts(ra, dec, size, band, version, brighten, equalize, color):
+def get_cutouts(ra, dec, size, band, version, brighten, equalize, greyscale):
     images = []
     for band in (1,2):
         try:
@@ -138,8 +138,8 @@ def get_cutouts(ra, dec, size, band, version, brighten, equalize, color):
     return StringIO(image), 200
 
 
-def get_cutout(ra, dec, size, band, version, brighten, equalize, color):
-    lut = create_lut(brighten=brighten,color=color)
+def get_cutout(ra, dec, size, band, version, brighten, equalize, greyscale):
+    lut = create_lut(brighten=brighten,color=not greyscale)
 
     try:
         cutouts = request_cutouts(ra, dec, size, band, version)
@@ -169,7 +169,7 @@ class Convert(Resource):
                             choices=range(1028)) # TODO: dammit dan
         parser.add_argument("equalize", type=inputs.boolean,
                             default=True)
-        parser.add_argument("color", type=inputs.boolean,
+        parser.add_argument("greyscale", type=inputs.boolean,
                             default=True)
         args = parser.parse_args()
 
