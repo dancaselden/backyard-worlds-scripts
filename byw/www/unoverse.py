@@ -40,6 +40,10 @@ GRAD = [
     "gradient:red-black",
 ]
 
+GREY = [
+    "gradient:white-black",
+]
+
 SUBJECTS, RDTREE = xref.read_cache("wsubcache.csv")
 
 # input fits img data, receive png data
@@ -74,7 +78,9 @@ def merge_imgs(file_datas, suffix=".png"):
     return subprocess.check_output(command, shell=True)
 
 
-def create_lut(gradient=GRAD, brighten=0):
+def create_lut(gradient=GRAD, brighten=0, color=True):
+    if color:
+        gradient = GREY
     command = "convert -size 5x20 {grad} {black} -append png:-".format(
         grad=" ".join(gradient),
         black='gradient:black-black ' * brighten)
@@ -104,7 +110,7 @@ def request_cutouts(ra, dec, size, band, version):
     return cutouts
 
 
-def get_cutouts(ra, dec, size, band, version, brighten, equalize):
+def get_cutouts(ra, dec, size, band, version, brighten, equalize, color):
     images = []
     for band in (1,2):
         try:
@@ -132,8 +138,8 @@ def get_cutouts(ra, dec, size, band, version, brighten, equalize):
     return StringIO(image), 200
 
 
-def get_cutout(ra, dec, size, band, version, brighten, equalize):
-    lut = create_lut(brighten=brighten)
+def get_cutout(ra, dec, size, band, version, brighten, equalize, color):
+    lut = create_lut(brighten=brighten,color=color)
 
     try:
         cutouts = request_cutouts(ra, dec, size, band, version)
@@ -162,6 +168,8 @@ class Convert(Resource):
         parser.add_argument("brighten", type=int, default=0,
                             choices=range(1028)) # TODO: dammit dan
         parser.add_argument("equalize", type=inputs.boolean,
+                            default=True)
+        parser.add_argument("color", type=inputs.boolean,
                             default=True)
         args = parser.parse_args()
 

@@ -46,6 +46,9 @@
             #equalizeInput {
                 width: 20px;
             }
+	    #colorInput {
+	        width: 80px;
+	    }
             #verValue {
                 margin: 0;
                 font-size: 2em;
@@ -73,6 +76,7 @@
                 this.size_input = jQuery("#sizeInput");
                 this.band_input = jQuery("#bandInput");
                 this.equalize_input = jQuery("#equalizeInput");
+                this.color_input = jQuery("#colorInput");
                 this.bright_input = jQuery("#brightInput");
                 this.speed_input = jQuery("#speedInput");
                 this.speed_output = jQuery("#speedValue");
@@ -102,6 +106,7 @@
                         brighten: this.bright_input.val(),
                         zoom: this.zoom_input.val(),
                         equalize: this.equalize_input.prop("checked"), 
+                        color: this.color_input.prop("checked"), 
                     });
                 };
 
@@ -147,6 +152,7 @@
                     this.size_input.val(map.size || 100);
                     this.band_input.val(map.band || 1);
                     this.equalize_input.prop("checked", map.equalize == "true");
+                    this.color_input.prop("checked", map.color == "false");
                     this.speed_input.val(map.speed || 1000);
                     this.bright_input.val(map.brighten || 64);
                     this.zoom_input.val(map.zoom || 5);
@@ -193,6 +199,7 @@
                             size: (~~(that.size_input.val()/1.375)), // Convert arcseconds to pixels
                             band: that.band_input.val(), 
                             equalize: that.equalize_input.prop("checked"), 
+                            color: that.color_input.prop("checked"), 
                             brighten: that.bright_input.val(),
                             zoom: that.zoom_input.val(),
                             version: value,
@@ -255,6 +262,10 @@
                     <input type="checkbox" class="resetters" id="equalizeInput" checked>
                 </div>
             </div>
+	    <div class="row">
+	      <label for="colorInput">Fun is the worst</label>
+	      <input type="checkbox" class="resetters" id="colorInput">
+	    </div>
             <hr>
             <div class="row">
                 <label for="speedInput">Speed (<span id="speedValue"></span>)</label>
