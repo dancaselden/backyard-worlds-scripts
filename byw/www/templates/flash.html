@@ -141,6 +141,27 @@
                     });
                 };
 
+	        this.updateZooiSubjects = function () {
+	            var loc_split = this.parseLoc();
+	            jQuery.getJSON("/xref", {
+	                "ra": loc_split[0],
+                        "dec": loc_split[1]
+                    }, function (response) {
+                        var zs = jQuery("#zooiSubjects");
+                        zs.empty();
+                        if (response["ids"].length > 0) {
+                            response["ids"].forEach(function (v) {
+                                var new_a = document.createElement("a");
+                                new_a.setAttribute("href","https://www.zooniverse.org/projects/marckuchner/backyard-worlds-planet-9/talk/subjects"+v);
+                                new_a.innerText = v;
+                                zs.append(new_a);
+                            })
+                        } else {
+                            zs.append(document.createTextNode("None"))
+                        }
+                    }
+                )}
+
                 this.fromUrl = function () {
                     var raw = window.location.hash.substr(1);
                     var map = {};
@@ -153,9 +174,9 @@
                     this.band_input.val(map.band || 2);
                     this.equalize_input.prop("checked", map.equalize == "true");
                     this.greyscale_input.prop("checked", map.greyscale != "false");
-                    this.speed_input.val(map.speed || 450);
+                    this.speed_input.val(map.speed || 500);
                     this.bright_input.val(map.brighten || 0);
-                    this.zoom_input.val(map.zoom || 7);
+                    this.zoom_input.val(map.zoom || 10);
 
                     this.restart();
                 };
@@ -196,7 +217,7 @@
                         var new_url = url + jQuery.param({
                             ra: loc_split[0], 
                             dec: loc_split[1], 
-                            size: (~~(that.size_input.val()/1.375)), // Convert arcseconds to pixels
+                            size: (~~(that.size_input.val()/2.75)), // Convert arcseconds to pixels
                             band: that.band_input.val(), 
                             equalize: that.equalize_input.prop("checked"), 
                             greyscale: that.greyscale_input.prop("checked"), 
@@ -214,6 +235,7 @@
                     });
 
                     this.updatePawnstars();
+	            this.updateZooiSubjects();
                     this.updateZoom();
                     this.updateUrl();
                     this.updateSpeed();
@@ -232,7 +254,8 @@
                     ws.fromUrl();
                 }
 
-                jQuery(".resetters").on("input", ws.restart.bind(ws));
+                jQuery(".resetters").on("input change", ws.restart.bind(ws));
+                jQuery(".resetters").on("checked change", ws.restart.bind(ws));
                 jQuery("#speedInput").on('input change', ws.updateSpeed.bind(ws));
                 jQuery("#zoomInput").on('input change', ws.updateZoom.bind(ws));
             });
@@ -246,35 +269,45 @@
             </div>
             <div class="row">
                 <div class="inline">
-                    <label for="sizeInput">Size</label>
-                    <input type="text" class="resetters" id="sizeInput" value="100">
-                </div>
-                <div class="inline">
-                    <label for="bandInput">Band</label>
-                    <input type="text" class="resetters" id="bandInput" value="1">
-                </div>
-                <div class="inline">
-                    <label for="brightInput">Brighten</label>
-                    <input type="text" class="resetters" id="brightInput" value="64">
+                    <label for="sizeInput">Size"</label>
+                    <input type="text" class="resetters" id="sizeInput" value="60">
                 </div>
                 <div>
-                    <label for="equalizeInput">Eq</label>
-                    <input type="checkbox" class="resetters" id="equalizeInput" checked>
+                    <label for="bandInput">WISE Band</label>
+                    <input type="text" class="resetters" id="bandInput" value="1">
                 </div>
             </div>
 	    <div class="row">
-	      <label for="greyscaleInput">Fun is the worst</label>
-	      <input type="checkbox" class="resetters" id="greyscaleInput">
+                <div class="inline">
+                    <label for="brightInput">Brighten</label>
+                    <input type="text" class="resetters" id="brightInput" value="0">
+                </div>
+                <div class="inline">
+                  <label for="equalizeInput">Equalize</label>
+                  <input type="checkbox" class="resetters" id="equalizeInput" checked>
+		</div><div>
+		  <label for="greyscaleInput">GreyScale</label>
+		  <input type="checkbox" class="resetters" id="greyscaleInput" checked>
+	      </div>
 	    </div>
             <hr>
             <div class="row">
+		<div>
                 <label for="speedInput">Speed (<span id="speedValue"></span>)</label>
-                <input type="range" min="20" max="3000" value="1000" id="speedInput">
-            </div>
+                <input type="range" min="20" max="3000" value="500" id="speedInput">
+            </div></div>
             <div class="row">
+		<div>
                 <label for="speedInput">Zoom (<span id="zoomValue"></span>)</label>
-                <input type="range" min="1" max="10" value="5" id="zoomInput">
-            </div>
+                <input type="range" min="1" max="20" value="10" id="zoomInput">
+            </div></div>
+	    <div class="row">
+	      <label>Zooniverse Subjects:</label>
+	      <div id="zooiSubjects">...</div>
+	    </div>
+	    
+		
+	    
         </div>
         
         <div class="row">

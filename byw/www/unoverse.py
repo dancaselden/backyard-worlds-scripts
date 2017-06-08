@@ -11,6 +11,7 @@ from flask import Flask
 from flask import make_response
 from flask import render_template
 from flask import send_file
+from flask import jsonify
 from flask_restful import Api
 from flask_restful import Resource
 from flask_restful import reqparse
@@ -242,8 +243,7 @@ class Xref_Page(Resource):
         args = parser.parse_args()
 
         subs = RDTREE.in_objs(radetree.Point(None,args.ra,args.dec))
-
-        return ','.join([str(s.entry.subject_id) for s in subs])
+        return jsonify({"ids":[str(s.entry.subject_id) for s in subs]})
 
 
 api.add_resource(Xref_Page, "/xref")
