@@ -19,7 +19,17 @@ from flask_restful import inputs
 
 import requests
 
+# Image processing
+import numpy as np
+import astropy.io.fits as aif
+import skimage.exposure as skie
+import skimage.util.dtype as skid
+from PIL import Image,ImageOps
+import astropy.visualization as av
+import matplotlib.pyplot as plt
+
 import byw.www.xref as xref
+import byw.www.image_parsing as imp
 import byw.common.radetree as radetree
 
 
@@ -46,25 +56,20 @@ GREY = [
 ]
 
 SUBJECTS, RDTREE = xref.read_cache("wsubcache.csv")
-
+                                                    
 # input fits img data, receive png data
-def convert_img(file_data, equalize=False, lutf="", right_pad=False):
-    inf = NamedTemporaryFile(suffix=".fits")
-    inf.write(file_data)
-    inf.seek(0)
-
-    tmp = None
-    if lutf:
-        tmp = NamedTemporaryFile(suffix=".png")
-        tmp.write(lutf)
-        tmp.seek(0)
-        lutf = "{0} -clut".format(tmp.name)
-
-    eql = "-equalize" if equalize else ""
-    pad = "-background black -gravity East -splice 5x0+0+0" if right_pad else ""
-    command = "convert {inf} {eql} {lutf} {pad} png:-".format(inf=inf.name, eql=eql, lutf=lutf, pad=pad)
-    return subprocess.check_output(command, shell=True)
-
+def convert_img(file_data,color,mode,linear,trimbright,right_pad=False):
+    img = aif.getdata(StringIO(file_data))        
+    sim = imp.complex(img,mode,linear,trimbright)
+    #sim = skie.rescale_intensity(img,out_range=(0,1))
+    opt_img = skid.img_as_ubyte(sim)
+    sio = StringIO()
+    im = ImageOps.invert(Image.fromarray(opt_img)).transpose(Image.FLIP_TOP_BOTTOM)
+    if color is not None:
+        plt.imsave(sio,im,format="png",cmap=color)
+    else:
+        im.save(sio,format="png")
+    return sio.getvalue()
 
 def merge_imgs(file_datas, suffix=".png"):
     temp_files = []
@@ -76,15 +81,6 @@ def merge_imgs(file_datas, suffix=".png"):
 
     joined_names = " ".join(map(lambda f: f.name, temp_files))
     command = "convert -background black {imgs} +append png:-".format(imgs=joined_names)
-    return subprocess.check_output(command, shell=True)
-
-
-def create_lut(gradient=GRAD, brighten=0, color=True):
-    if not color:
-        gradient = GREY
-    command = "convert -size 5x20 {grad} {black} -append png:-".format(
-        grad=" ".join(gradient),
-        black='gradient:black-black ' * brighten)
     return subprocess.check_output(command, shell=True)
 
 
@@ -111,9 +107,9 @@ def request_cutouts(ra, dec, size, band, version):
     return cutouts
 
 
-def get_cutouts(ra, dec, size, band, version, brighten, equalize, greyscale):
-    images = []
-    for band in (1,2):
+def get_cutouts(ra, dec, size, band, version, mode, color, linear, trimbright):
+    images = {1:[],2:[]}
+    for band in images:
         try:
             cutouts = request_cutouts(ra, dec, size, band, version)
         except Exception as e:
@@ -121,27 +117,47 @@ def get_cutouts(ra, dec, size, band, version, brighten, equalize, greyscale):
 
         converted = []
         for offset, cutout in enumerate(cutouts):
-            pad = offset != len(cutouts)
-            converted.append(convert_img(cutout.read(), equalize=equalize, right_pad=pad))
+            #pad = offset != len(cutouts)
+            #im = convert_img(cutout.read(), None, linear,
+            #                 trimbright, right_pad=pad)
+            #converted.append(im)
+            # Convert from fits
+            im = aif.getdata(StringIO(cutout.read()))
+            images[band].append(im)
 
-        images.append(merge_imgs(converted))
+    if len(images[1]) != len(images[2]):
+        return "Got imbalanced number of cutouts for W1 and W2", 500
 
-    infs = []
-    for image in images:
-        inf = NamedTemporaryFile(suffix=".png")
-        inf.write(image)
-        inf.seek(0)
-        infs.append(inf)
-    outf = NamedTemporaryFile(suffix=".png")
-    cmd = "convert {inf2} {inf1} -background black -channel RB -combine -".format(inf1=infs[0].name,inf2=infs[1].name)
-    image = subprocess.check_output(cmd,shell=True)
+    # Pair W1 and W2 cutouts
+    images = [(images[1][i],images[2][i]) for i in xrange(len(images[1]))]
 
-    return StringIO(image), 200
+    rgb_images = []
+    for w1,w2 in images:
+        # Complex scales to 0,1, works w/ uint
+        w1 = imp.complex(w1,mode,linear,trimbright)
+        w2 = imp.complex(w2,mode,linear,trimbright)
+        # Invert
+        w1 = 1-w1
+        w2 = 1-w2
+        # Scale to 0,255
+        w1 = skid.img_as_ubyte(w1)
+        w2 = skid.img_as_ubyte(w2)
+        # merge images
+        sio = StringIO()
+        arr = np.zeros((w1.shape[0],w1.shape[1],3),"uint8")
+        arr[..., 0] = w1
+        arr[..., 1] = np.mean([w1,w2],axis=0)
+        arr[..., 2] = w2
+        #im = ImageOps.invert(Image.fromarray(arr)).transpose(Image.FLIP_TOP_BOTTOM)
+        im = Image.fromarray(arr).transpose(Image.FLIP_TOP_BOTTOM)
+        im.save(sio,format="png")
+        rgb_images.append(sio.getvalue())
+
+    # Merge images
+    return StringIO(merge_imgs(rgb_images)), 200
 
 
-def get_cutout(ra, dec, size, band, version, brighten, equalize, greyscale):
-    lut = create_lut(brighten=brighten,color=not greyscale)
-
+def get_cutout(ra, dec, size, band, version, mode, color, linear, trimbright):
     try:
         cutouts = request_cutouts(ra, dec, size, band, version)
     except Exception as e:
@@ -150,7 +166,8 @@ def get_cutout(ra, dec, size, band, version, brighten, equalize, greyscale):
     converted = []
     for offset, cutout in enumerate(cutouts):
         pad = offset != (len(cutouts) - 1)
-        converted.append(convert_img(cutout.read(), equalize=equalize, lutf=lut, right_pad=pad))
+        converted.append(convert_img(cutout.read(), color, mode, linear,
+                                     trimbright, right_pad=pad))
 
     image = merge_imgs(converted)
 
@@ -166,20 +183,27 @@ class Convert(Resource):
         parser.add_argument("band", type=int, default=3, choices=[1,2,3])
         parser.add_argument("version", type=str, default="neo2", 
                                     choices=["allwise", "neo1", "neo2"])
-        parser.add_argument("brighten", type=int, default=0,
-                            choices=range(1028)) # TODO: dammit dan
-        parser.add_argument("equalize", type=inputs.boolean,
-                            default=True)
-        parser.add_argument("greyscale", type=inputs.boolean,
-                            default=True)
+        parser.add_argument("mode", type=str, default="adapt",
+                            choices=["adapt","percent","fixed"])
+        parser.add_argument("color", type=str, default="Greys",
+                            choices=["viridis","plasma","inferno","magma","Greys","Purples","Blues","Greens","Oranges","Reds","YlOrBr","YlOrRd","OrRd","PuRd","RdPu","BuPu","GnBu","PuBu","YlGnBu","PuBuGn","BuGn","YlGn","binary","gist_yarg","gist_gray","gray","bone","pink","spring","summer","autumn","winter","cool","Wistia","hot","afmhot","gist_heat","copper","PiYG","PRGn","BrBG","PuOr","RdGy","RdBu","RdYlBu","RdYlGn","Spectral","coolwarm","bwr","seismic","Pastel1","Pastel2","Paired","Accent","Dark2","Set1","Set2","Set3","tab10","tab20","tab20b","tab20c","flag","prism","ocean","gist_earth","terrain","gist_stern","gnuplot","gnuplot2","CMRmap","cubehelix","brg","hsv","gist_rainbow","rainbow","jet","nipy_spectral","gist_ncar"])
+        parser.add_argument("linear",type=float,default=0.2)
+        parser.add_argument("trimbright",type=float,default=99.2)
         args = parser.parse_args()
+
+        if args.linear <= 0.0: args.linear = 0.0000000001
+        elif args.linear > 1.0: args.linear = 1.0
+
+        if args.trimbright <= 0.0: args.trimbright = 0.0000000001
+        elif args.mode == "percent" and args.trimbright > 100.0: args.trimbright = 100.0
 
         if args.band in (1,2):
             cutout, status = get_cutout(**args)
         else:
             cutout, status = get_cutouts(**args)
-            if status != 200:
-                return "Request failed", 500
+        
+        if status != 200:
+            return "Request failed", 500
 
         return send_file(cutout, mimetype="image/png")   
 
