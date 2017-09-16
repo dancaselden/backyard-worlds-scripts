@@ -36,7 +36,7 @@ import byw.common.radetree as radetree
 
 app = Flask(__name__)
 api = Api(app)
-
+app.config['PROPAGATE_EXCEPTIONS'] = True
 
 PATH = "http://unwise.me/cutout_fits?file_img_m=on&version={version}&ra={ra}&dec={dec}&size={size}&bands={band}"
 
