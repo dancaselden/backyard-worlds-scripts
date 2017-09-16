@@ -31,6 +31,7 @@ import matplotlib.pyplot as plt
 import byw.www.xref as xref
 import byw.www.image_parsing as imp
 import byw.common.radetree as radetree
+import byw.www.comover as comover
 
 
 
@@ -66,12 +67,12 @@ def convert_img(file_data,color,mode,linear,trimbright,right_pad=False):
     sio = StringIO()
     im = ImageOps.invert(Image.fromarray(opt_img)).transpose(Image.FLIP_TOP_BOTTOM)
     if color is not None:
-        plt.imsave(sio,im,format="png",cmap=color)
+        plt.imsave(sio,im,format="bmp",cmap=color)
     else:
-        im.save(sio,format="png")
+        im.save(sio,format="bmp")
     return sio.getvalue()
 
-def merge_imgs(file_datas, suffix=".png"):
+def merge_imgs(file_datas, suffix=".bmp"):
     temp_files = []
     for file_data in file_datas:
         inf = NamedTemporaryFile(suffix=suffix)
@@ -80,7 +81,7 @@ def merge_imgs(file_datas, suffix=".png"):
         temp_files.append(inf)
 
     joined_names = " ".join(map(lambda f: f.name, temp_files))
-    command = "convert -background black {imgs} +append png:-".format(imgs=joined_names)
+    command = "convert -background black {imgs} +append bmp:-".format(imgs=joined_names)
     return subprocess.check_output(command, shell=True)
 
 
@@ -150,7 +151,7 @@ def get_cutouts(ra, dec, size, band, version, mode, color, linear, trimbright):
         arr[..., 2] = w2
         #im = ImageOps.invert(Image.fromarray(arr)).transpose(Image.FLIP_TOP_BOTTOM)
         im = Image.fromarray(arr).transpose(Image.FLIP_TOP_BOTTOM)
-        im.save(sio,format="png")
+        im.save(sio,format="bmp")
         rgb_images.append(sio.getvalue())
 
     # Merge images
@@ -205,7 +206,7 @@ class Convert(Resource):
         if status != 200:
             return "Request failed", 500
 
-        return send_file(cutout, mimetype="image/png")   
+        return send_file(cutout, mimetype="image/bmp")
 
 
 api.add_resource(Convert, "/convert")
@@ -273,6 +274,35 @@ class Xref_Page(Resource):
 api.add_resource(Xref_Page, "/xref")
 
 
+
+class Comover_Page(Resource):
+    def get(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument("ra", type=float, required=True)
+        parser.add_argument("e_ra", type=float, required=False)
+        parser.add_argument("dec", type=float, required=True)
+        parser.add_argument("e_dec", type=float, required=False)
+        parser.add_argument("pmRA", type=float, required=True)
+        parser.add_argument("e_pmRA", type=float, required=False)
+        parser.add_argument("pmDE", type=float, required=True)
+        parser.add_argument("e_pmDE", type=float, required=False)
+        parser.add_argument("radius", type=float, required=False,
+                            default=0.2)
+        args = parser.parse_args()
+        if args.radius > 0.4:
+            return "Max radius is 0.4 degrees",500
+        
+        entries = comover.get_entries(args.ra,args.dec,args.pmRA,args.pmDE,
+                                      radius=args.radius,
+                                      e_ra=args.e_ra,
+                                      e_dec=args.e_dec,
+                                      e_pmRA=args.e_pmRA,
+                                      e_pmDE=args.e_pmDE)
+
+        return jsonify(entries)
+
+
+api.add_resource(Comover_Page, "/comover")
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0")
