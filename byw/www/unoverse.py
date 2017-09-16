@@ -67,12 +67,12 @@ def convert_img(file_data,color,mode,linear,trimbright,right_pad=False):
     sio = StringIO()
     im = ImageOps.invert(Image.fromarray(opt_img)).transpose(Image.FLIP_TOP_BOTTOM)
     if color is not None:
-        plt.imsave(sio,im,format="bmp",cmap=color)
+        plt.imsave(sio,im,format="png",cmap=color)
     else:
-        im.save(sio,format="bmp")
+        im.save(sio,format="png")
     return sio.getvalue()
 
-def merge_imgs(file_datas, suffix=".bmp"):
+def merge_imgs(file_datas, suffix=".png"):
     temp_files = []
     for file_data in file_datas:
         inf = NamedTemporaryFile(suffix=suffix)
@@ -81,7 +81,7 @@ def merge_imgs(file_datas, suffix=".bmp"):
         temp_files.append(inf)
 
     joined_names = " ".join(map(lambda f: f.name, temp_files))
-    command = "convert -background black {imgs} +append bmp:-".format(imgs=joined_names)
+    command = "convert -background black {imgs} +append png:-".format(imgs=joined_names)
     return subprocess.check_output(command, shell=True)
 
 
@@ -151,7 +151,7 @@ def get_cutouts(ra, dec, size, band, version, mode, color, linear, trimbright):
         arr[..., 2] = w2
         #im = ImageOps.invert(Image.fromarray(arr)).transpose(Image.FLIP_TOP_BOTTOM)
         im = Image.fromarray(arr).transpose(Image.FLIP_TOP_BOTTOM)
-        im.save(sio,format="bmp")
+        im.save(sio,format="png")
         rgb_images.append(sio.getvalue())
 
     # Merge images
@@ -206,7 +206,7 @@ class Convert(Resource):
         if status != 200:
             return "Request failed", 500
 
-        return send_file(cutout, mimetype="image/bmp")
+        return send_file(cutout, mimetype="image/png")
 
 
 api.add_resource(Convert, "/convert")
