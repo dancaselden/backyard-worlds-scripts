@@ -4,12 +4,12 @@ import astropy.units as u
 import collections
 import numpy as np
 
-#Vizier = viz.Vizier(columns=["*","pmRA","pmDE"])
 Vizier = viz.Vizier(columns=["*","pmRA","pmDE",
                              "e_pmRA","e_pmDE",
                              ],
                              keywords=["Proper_Motions"])
-#Vizier = viz.Vizier
+Vizier.ROW_LIMIT = -1
+
 def query_region(ra,dec,radius):
     return Vizier.query_region(acoo.SkyCoord(ra=ra,dec=dec,
                                                  unit=(u.deg,u.deg),frame="icrs"),
@@ -127,21 +127,69 @@ def extract_pm_entries(tables):
             continue
     return entries,badcats
 
-def get_entries(ra,dec,pmRA,pmDE,radius=0.2,e_ra=None,e_dec=None,e_pmRA=None,e_pmDE=None):
-    # Make fancy typed values
-    #pmRA = pmRA * u.mas / u.year
-    #pmDE = pmDE * u.mas / u.year
+def getsep(pme1,pme2):
+    c1 = acoo.SkyCoord(pme1.ra,pme1.dec,unit=(u.deg,u.deg),frame="icrs")
+    c2 = acoo.SkyCoord(pme2.ra,pme2.dec,unit=(u.deg,u.deg),frame="icrs")
+    return c2.separation(c1)
+
+def lb(pme1,pme2,sep):
+    """
+    R = pme1.pmRA
+    T = pme1.pmDE
+    AD = sep(pme1,pme2)
+    LB_req = min((1000*(sqrt(R104^2+T104^2)/150)^3.8)/(60*AD104), 50)
+    """
+    lb_ = min((1000*(((((pme1.pmRA**2)+(pme1.pmDE**2))**(0.5))/150)**3.8))/(sep.arcsec),50)
+    return lb_
+
+def pmdiff(pme1,pme2):
+    """
+    pmmag_diff = SQRT((AG437-R437)^2+(AI437-T437)^2)
+    """
+    pmdiff = (((pme2.pmRA-pme1.pmRA)**2)+((pme2.pmDE-pme1.pmDE)**2))**(0.5)
+    return pmdiff    
+    
+def get_entries_(ra,dec,pmRA,pmDE,radius=0.2,e_ra=None,e_dec=None,e_pmRA=None,e_pmDE=None):
+    ent = PMEntry("Supplied",ra,e_ra,dec,e_dec,pmRA,e_pmRA,pmDE,e_pmDE)
     # Get all Vizier entries within radius of ra, dec
     tables = query_region(ra,dec,radius)
     # Find all rows with at least RA, Dec, pmRA, pmDE
     # Normalize until PMEntry objects
     entries,badcats = extract_pm_entries(tables)
-    # Sort by rudimentary pmRA,pmDE distance
-    entries = sorted(entries,key=lambda pme: ((pme.pmRA - pmRA)**2)+((pme.pmDE - pmDE)**2))
-    res = [PMEntryHeader]
+    res = []
     for pme in entries:
-        res.append(",".join([str(k) for k in pme]))
-    return {"entries":res,
+        pmdiff_ = pmdiff(ent,pme)
+        sep = getsep(ent,pme)
+        lbcrit_ = lb(ent,pme,sep)
+        res.append((
+            # Entry
+            pme,
+            # Separation
+            sep,
+            # PM Diff
+            pmdiff_,
+            # LB Criteria
+            lbcrit_,
+            lbcrit_-pmdiff_,
+            ))
+    res = sorted(res,key=lambda k:k[4],reverse=True)
+    return res,badcats
+
+def stringify_entries(ents):
+    res2 = [",".join([PMEntryHeader,"separation","pm_diff","lb_criterion","lb_minus_pm"])]
+    for pme,sep,pmd,lbc,minus in ents:
+        r = [str(k) for k in pme]
+        r.append(sep.deg)
+        r.append(pmd)
+        r.append(lbc)
+        r.append(minus)
+        res2.append(",".join([str(k) for k in r]))
+    return res2
+
+def get_entries(ra,dec,pmRA,pmDE,radius=0.2,e_ra=None,e_dec=None,e_pmRA=None,e_pmDE=None):
+    res,badcats = get_entries_(ra,dec,pmRA,pmDE,radius=radius,
+                               e_ra=e_ra,e_dec=e_dec,e_pmRA=e_pmRA)
+    return {"entries":stringify_entries(res),
             "failed catalogs":badcats,
             }
 
