@@ -71,7 +71,7 @@ def get_tiles(ra,dec):
         if d < 0: continue
         nearest_edge = min(d,nearest_edge)
         
-        # Left
+        # Right
         d = ra - (tile["ra"]-((tile_width/2.0)/cosd))
         if d < 0: continue
         nearest_edge = min(d,nearest_edge)
