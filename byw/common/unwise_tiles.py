@@ -69,15 +69,11 @@ def get_tiles(ra,dec):
         # Left
         d = tile["ra"]+((tile_width/2.0)/cosd) - ra
         if d < 0: continue
-        # Convert RA Separation to Angular
-        d = d
         nearest_edge = min(d,nearest_edge)
         
         # Left
         d = ra - (tile["ra"]-((tile_width/2.0)/cosd))
         if d < 0: continue
-        # Convert RA Separation to Angular
-        d = d
         nearest_edge = min(d,nearest_edge)
 
         within_tiles.append((nearest_edge,tile))
