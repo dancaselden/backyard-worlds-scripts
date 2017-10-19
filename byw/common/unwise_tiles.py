@@ -15,6 +15,9 @@ tile_corner_radius = math.sqrt((
     **2)*2) # Euclidean distance
 
 
+epoch_dict = None
+
+
 class rdtree:
     def __init__(self,table):
         self.table = table
@@ -32,15 +35,28 @@ class rdtree:
         return self.rdtree.query_radius(x,sep,return_distance=True)
 
 
-def __init(atlas):
-    """Initialize the global tile tree and table from CSV"""
-    global tile_tree, tile_table
+def __init(atlas,epochs):
+    """
+    Initialize the global tile tree and table from CSV,
+    and the tile & date -> epoch list from CSV
+    """
+    global tile_tree, tile_table, epoch_dict
     
     # Read tile descriptions from disk
     tile_table = aio.ascii.Csv().read(atlas)
 
     # Build global tile tree
     tile_tree = rdtree(tile_table)
+
+    # Read epochs from disk
+    epoch_table = aio.ascii.Csv().read(epochs)
+
+    # Build epoch dict
+    epoch_dict = {}
+    for row in epoch_table:
+        if not row["tile"] in epoch_dict:
+            epoch_dict[row["tile"]] = []
+        epoch_dict[row["tile"]].append(row)
 
 
 def get_tiles(ra,dec):
@@ -84,18 +100,29 @@ def get_tiles(ra,dec):
     return sorted(within_tiles,key=lambda x: x[0], reverse=True)
 
 
+def get_epochs(tile,start_mjd=0,end_mjd=2**32):
+    """Get all epochs of given tile after start_mjd and before end_mjd"""
+    return [epoch for epoch in epoch_dict[tile]
+            if not (end_mjd < epoch["mjdmin"] or
+                    start_mjd > epoch["mjdmax"])]
+        
+    
 def main():
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("ra")
     ap.add_argument("dec")
     ap.add_argument("--atlas",default="allsky-atlas.csv")
+    ap.add_argument("--epochs",default="tr_neo2_index.csv")
     args = ap.parse_args()
 
-    __init(args.atlas)
+    __init(args.atlas,args.epochs)
 
     for _,tile in get_tiles(float(args.ra),float(args.dec)):
-        print tile["tile"]
+        print tile["tile"],
+        for e in get_epochs(tile["tile"]):
+            print e["epoch"],
+        print
     
 if __name__ == "__main__": main()
-else: __init("allsky-atlas.csv")
+else: __init("allsky-atlas.csv","tr_neo2_index.csv")
