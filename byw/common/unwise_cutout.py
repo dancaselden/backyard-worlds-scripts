@@ -103,9 +103,9 @@ def get(ra,dec,band,picker=lambda x: True,size=None):
 def get_by_mjd(ra,dec,band,start_mjd=0,end_mjd=2**23,size=None):
     """Get tiles with epochs within supplied date range"""
     return get(ra,dec,band,
-               picker=lambda e,i: (band == epoch["BAND"] and
-                                   not (end_mjd <= epoch["MJDMIN"] or
-                                        start_mjd >= epoch["MJDMAX"])),
+               picker=lambda e,i: (band == e["BAND"] and
+                                   not (end_mjd <= e["MJDMIN"] or
+                                        start_mjd >= e["MJDMAX"])),
                size=size)
 
 
@@ -117,7 +117,7 @@ def get_by_epoch_order(ra,dec,band,epochs,size=None):
     epoch numbering is e000 and e001
     """
     return get(ra,dec,band,
-               picker=lambda e,i: (band == epoch["BAND"] and i in epochs),
+               picker=lambda e,i: (band == e["BAND"] and i in epochs),
                size=size)
 
 
@@ -126,7 +126,7 @@ def get_by_epoch_name(ra,dec,band,epochs,size=None):
     Return tiles with epoch names as supplied, like "e000"
     """
     return get(ra,dec,band,
-               picker=lambda e,i: (band == epoch["BAND"] and
+               picker=lambda e,i: (band == e["BAND"] and
                                    ("e%03d"%(e["epoch"])) in epochs),
                size=size)
 
@@ -143,10 +143,10 @@ def main():
 
     #tiles = get_by_mjd(args.ra,args.dec,args.band,args.start_mjd,args.end_mjd)
     tiles = get_by_epoch_order(args.ra,args.dec,args.band,epochs=(args.epoch,),size=args.size)
-    open("/tmp/test","wb").write(tiles[0].copy(order='C'))
     print "Got %d tiles"%len(tiles)
     print "First one is %d bytes"%len(tiles[0])
     print "And it starts with:",repr(tiles[0][:64])
+    open("/tmp/test","wb").write(tiles[0].copy(order='C'))
 
     raise Exception("NOT IMPLEMENTED")
     
