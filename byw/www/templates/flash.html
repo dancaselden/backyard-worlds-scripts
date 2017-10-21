@@ -116,7 +116,6 @@
 
         <script>
             var url = "/convert?";
-            var versions = ["allwise", "neo1", "neo2"];
 
             function WiseSwapper () {
                 this.container = jQuery("#image");
@@ -129,6 +128,7 @@
                 this.trimbright_output = jQuery("#trimbrightValue");
                 this.color_input = jQuery("#colorInput");
                 this.mode_input = jQuery("#modeInput");
+                this.coadd_mode_input = jQuery("#coaddModeInput");
                 this.speed_input = jQuery("#speedInput");
                 this.speed_output = jQuery("#speedValue");
                 this.zoom_input = jQuery("#zoomInput");
@@ -137,6 +137,8 @@
                 this.canvas = jQuery("#daCanvas");
                 this.context = this.canvas.get(0).getContext("2d");
 
+	        this.versions = [];
+                this.full_depth_versions = ["allwise", "neo1", "neo2"];
 
                 this.updateSpeed = function () {
                     clearInterval(this.interval);
@@ -158,6 +160,7 @@
                         linear: this.linear_input.val(),
 	                color: this.color_input.val(),
 	                mode: this.mode_input.val(),
+	                coadd_mode: this.coadd_mode_input.val(),
                         zoom: this.zoom_input.val(),
                     });
                 };
@@ -232,7 +235,8 @@
                     this.band_input.val(map.band || 2);
                     this.speed_input.val(map.speed || 500);
                     this.color_input.val(map.color || "gray");
-                    this.mode_input.val(map.mode || "adapt");
+                    this.mode_input.val(map.mode || "percent");
+                    this.coadd_mode_input.val(map.coadd_mode || "time-resolved");
                     this.linear_input.val(map.linear || 0.2);
                     this.trimbright_input.val(map.trimbright || 99.2);
                     this.zoom_input.val(map.zoom || 10);
@@ -248,17 +252,27 @@
                 this.reset = function () {
                     clearInterval(this.interval);
                     this.images = [];
-                    this.cur_img = 0;
+                    this.cur_img = NaN;
                 };
 
                 this.advance = function () {
-                    this.cur_img = (this.cur_img + 1) % this.images.length;
-                    this.ver_output.text(versions[this.cur_img]);
+                    if (this.images.length == 0) {
+                        // Nothing to do yet
+                        return;
+                    }
+                    if (isNaN(this.cur_img)) {
+                        this.cur_img = 0
+                    } else {
+                        this.cur_img = (this.cur_img + 1) % this.images.length;
+                    }
+                    this.ver_output.text(this.versions[this.cur_img]);
                 };
 
                 this.draw = function () {
-                    var image = this.images[this.cur_img];
-                    this.context.drawImage(image, 0, 0);
+                    if (!isNaN(this.cur_img)) {
+			var image = this.images[this.cur_img];
+			this.context.drawImage(image, 0, 0);
+                    }
                 };
 
                 this.frame = function () {
@@ -266,11 +280,40 @@
                     this.draw();
                 };
 
+		this.make_imgs = function () {
+                    var loc_split = this.parseLoc();
+                    
+                    var that = this;
+                    
+		    this.versions.forEach(function (value) {
+			var new_url = url + jQuery.param({
+			    ra: loc_split[0], 
+			    dec: loc_split[1], 
+			    size: (~~(that.size_input.val()/2.75)), // Convert arcseconds to pixels
+			    band: that.band_input.val(), 
+			    color: that.color_input.val(), 
+			    mode: that.mode_input.val(), 
+			    coadd_mode: that.coadd_mode_input.val(), 
+			    linear: that.linear_input.val(), 
+			    trimbright: that.trimbright_input.val(),
+			    zoom: that.zoom_input.val(),
+			    version: value,
+			});
+			var new_img = document.createElement("img");
+			new_img.setAttribute("src", new_url);
+			jQuery(new_img).on("load", function () {
+			    that.real_img_size = [this.width, this.height];
+			    that.updateZoom();
+			});
+			that.images.push(new_img);
+		    });
+		};
+this.notifygo = function () { console.log("Fired input changed"); }
                 this.restart = function () {
                     this.reset();
 
                     var loc_split = this.parseLoc();
-
+	            
                     if (this.mode_input.val() == "adapt") {
                         jQuery("#trimbrightRow").hide()
                     } else if(this.mode_input.val() == "fixed") {
@@ -282,29 +325,43 @@
                         jQuery("#trimbrightInput").attr("max",100.0)
                         jQuery("#trimbrightInput").attr("min",75.0)
                     }
-
+                    
                     var that = this;
-                    versions.forEach(function (value) {
-                        var new_url = url + jQuery.param({
-                            ra: loc_split[0], 
-                            dec: loc_split[1], 
-                            size: (~~(that.size_input.val()/2.75)), // Convert arcseconds to pixels
-                            band: that.band_input.val(), 
-                            color: that.color_input.val(), 
-                            mode: that.mode_input.val(), 
-                            linear: that.linear_input.val(), 
-                            trimbright: that.trimbright_input.val(),
-                            zoom: that.zoom_input.val(),
-                            version: value,
-                        });
-                        var new_img = document.createElement("img");
-                        new_img.setAttribute("src", new_url);
-                        jQuery(new_img).on("load", function () {
-                            that.real_img_size = [this.width, this.height];
-                            that.updateZoom();
-                        });
-                        that.images.push(new_img);
-                    });
+                    
+                    if (this.coadd_mode_input.val() == "full-depth") {
+                        this.versions = this.full_depth_versions.slice()
+                        this.make_imgs()
+                        this.draw();
+                    } else {
+			jQuery.getJSON("/tiles", {
+			    "ra": loc_split[0],
+			    "dec": loc_split[1]
+			}, function (response) {
+			    that.versions = [];
+			    // Only use one tile
+			    response["tiles"][0]["epochs"].forEach(function (e) {
+			        var band = that.band_input.val()
+			        if (band == 3) { band = 1; } // Use W1 meta for W1 and W2... can fail in corner cases :(
+			        
+			        if (String(that.coadd_mode_input.val()).startsWith("parallax-cancelling")) {
+			            var baseline = 0;
+			            if (that.coadd_mode_input.val() == "parallax-cancelling-e1") { baseline = 1; }
+			            var e0 = response["tiles"][0]["epochs"][baseline];
+			            var mean0 = (Number(e0["mjdmin"])+Number(e0["mjdmax"]))/2.0;
+			            var meanx = (Number(e["mjdmin"])+Number(e["mjdmax"]))/2.0;
+			            if (e["band"] == band && Math.abs((mean0%365)-(meanx%365)) < 90) {
+			                that.versions.push(response["tiles"][0]["coadd_id"]+"/"+e["epoch"]);console.log(that.versions)
+			            }
+			        } else {
+			            if (e["band"] == band) {
+			                that.versions.push(response["tiles"][0]["coadd_id"]+"/"+e["epoch"]);console.log(that.versions)
+			            }
+			        }
+			    },that)
+                            that.make_imgs();
+                            that.draw();
+			})
+		    }
 
                     this.updatePawnstars();
 	            this.updateZooiSubjects();
@@ -312,7 +369,6 @@
                     this.updateZoom();
                     this.updateUrl();
                     this.updateSpeed();
-                    this.draw();
                 };
             }
 
@@ -327,14 +383,14 @@
                     ws.fromUrl();
                 }
 
-                jQuery(".resetters").on("input change", ws.restart.bind(ws));
-                jQuery(".resetters").on("checked change", ws.restart.bind(ws));
-                jQuery("#speedInput").on('input change', ws.updateSpeed.bind(ws));
-                jQuery("#zoomInput").on('input change', ws.updateZoom.bind(ws));
+                jQuery(".resetters").on("change", ws.restart.bind(ws));
+                jQuery(".resetters").on("change", ws.notifygo.bind(ws));
+                jQuery("#speedInput").on('change', ws.updateSpeed.bind(ws));
+                jQuery("#zoomInput").on('change', ws.updateZoom.bind(ws));
 	        jQuery("#linearInput").on("mouseup", ws.restart.bind(ws));
 	    	jQuery("#trimbrightInput").on("mouseup", ws.restart.bind(ws));
-	        jQuery("#linearInput").on("input change", ws.updateOtherSliders.bind(ws));
-	    	jQuery("#trimbrightInput").on("input change", ws.updateOtherSliders.bind(ws));
+	        jQuery("#linearInput").on("change", ws.updateOtherSliders.bind(ws));
+	    	jQuery("#trimbrightInput").on("change", ws.updateOtherSliders.bind(ws));
             });
         </script>
     </head>
@@ -443,9 +499,9 @@
 	      </select>
 	      <select class="resetters" id="modeInput">
 		<option selected disabled>Drawing Mode</option>
-		<option select="selected" value="adapt">adapt</option>
+		<option value="adapt">adapt</option>
 		<option value="fixed">fixed</option>
-		<option value="percent">percent</option>
+		<option select="selected" value="percent">percent</option>
 	      </select>
 	    </div>
 	  </div>
@@ -473,6 +529,18 @@
               <input type="range" min="1" max="20" value="10" id="zoomInput">
 	    </div>
 	  </div>
+	  <div class="row">
+            <div>
+              <label for="coaddModeInput" style="display: inline;">Coadd Mode</label>
+	      <select class="resetters" id="coaddModeInput">
+		<option selected disabled>Drawing Mode</option>
+		<option select="selected" value="time-resolved">time-resolved</option>
+		<option value="parallax-cancelling-e0">parallax-cancelling-e0</option>
+		<option value="parallax-cancelling-e1">parallax-cancelling-e1</option>
+		<option value="full-depth">full-depth</option>
+	      </select>
+            </div>
+          </div>
 	</div>
         <hr>
 	<div class="dataDiv">
@@ -495,7 +563,6 @@
 	</div>
       </div>
       <div class="row">
-	<p>THE SCIENCE RESUMES</p>
         <p id="verValue">Survey Name</p>
         <div id="image">
           <canvas id="daCanvas" width="100" height="100"></canvas>

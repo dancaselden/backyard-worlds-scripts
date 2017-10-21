@@ -32,6 +32,8 @@ import byw.www.xref as xref
 import byw.www.image_parsing as imp
 import byw.common.radetree as radetree
 import byw.www.comover as comover
+import byw.common.unwise_tiles as unwtiles
+import byw.common.unwise_cutout as unwcutout
 
 
 
@@ -60,16 +62,19 @@ SUBJECTS, RDTREE = xref.read_cache("wsubcache.csv")
                                                     
 # input fits img data, receive png data
 def convert_img(file_data,color,mode,linear,trimbright,right_pad=False):
-    img = aif.getdata(StringIO(file_data))        
+    img = file_data
     sim = imp.complex(img,mode,linear,trimbright)
     #sim = skie.rescale_intensity(img,out_range=(0,1))
     opt_img = skid.img_as_ubyte(sim)
     sio = StringIO()
+    
     im = ImageOps.invert(Image.fromarray(opt_img)).transpose(Image.FLIP_TOP_BOTTOM)
+
     if color is not None:
         plt.imsave(sio,im,format="png",cmap=color)
     else:
         im.save(sio,format="png")
+
     return sio.getvalue()
 
 def merge_imgs(file_datas, suffix=".png"):
@@ -96,15 +101,20 @@ def find_tar_fits(tar_data):
 
 
 def request_cutouts(ra, dec, size, band, version):
-    url = PATH.format(ra=ra, dec=dec, size=size, band=band, version=version)
-    response = requests.get(url)
-    if response.status_code != 200:
-        raise Exception("Invalid response")
+    if version in ("allwise","neo1","neo2"):
+        url = PATH.format(ra=ra, dec=dec, size=size, band=band, version=version)
+        response = requests.get(url)
+        if response.status_code != 200:
+            raise Exception("Invalid response")
 
-    cutouts = find_tar_fits(response.content)
-    if not cutouts:
-        raise Exception("No fits files found")
-
+        cutouts = [aif.getdata(StringIO(c.read())) for c in find_tar_fits(response.content)]
+        if not cutouts:
+            raise Exception("No fits files found")
+    elif version[4] in "pm" and version[8] == "/":
+        tile,epoch = version.split("/")
+        cutouts = [unwcutout.get_by_tile_epoch(tile,epoch,ra,dec,band,size=size)]
+    else:
+        raise Exception("Invalid version %s"%version)
     return cutouts
 
 
@@ -123,7 +133,8 @@ def get_cutouts(ra, dec, size, band, version, mode, color, linear, trimbright):
             #                 trimbright, right_pad=pad)
             #converted.append(im)
             # Convert from fits
-            im = aif.getdata(StringIO(cutout.read()))
+            #im = aif.getdata(StringIO(cutout.read()))
+            im = cutout
             images[band].append(im)
 
     if len(images[1]) != len(images[2]):
@@ -162,12 +173,13 @@ def get_cutout(ra, dec, size, band, version, mode, color, linear, trimbright):
     try:
         cutouts = request_cutouts(ra, dec, size, band, version)
     except Exception as e:
+        print e
         return "Error: {0}".format(str(e)), 500
 
     converted = []
     for offset, cutout in enumerate(cutouts):
         pad = offset != (len(cutouts) - 1)
-        converted.append(convert_img(cutout.read(), color, mode, linear,
+        converted.append(convert_img(cutout, color, mode, linear,
                                      trimbright, right_pad=pad))
 
     image = merge_imgs(converted)
@@ -182,8 +194,7 @@ class Convert(Resource):
         parser.add_argument("dec", type=float, required=True)
         parser.add_argument("size", type=int, default=100)
         parser.add_argument("band", type=int, default=3, choices=[1,2,3])
-        parser.add_argument("version", type=str, default="neo2", 
-                                    choices=["allwise", "neo1", "neo2"])
+        parser.add_argument("version", type=str, default="neo2")
         parser.add_argument("mode", type=str, default="adapt",
                             choices=["adapt","percent","fixed"])
         parser.add_argument("color", type=str, default="Greys",
@@ -303,6 +314,31 @@ class Comover_Page(Resource):
 
 
 api.add_resource(Comover_Page, "/comover")
+
+
+
+class Tiles_Page(Resource):
+    def get(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument("ra", type=float, required=True)
+        parser.add_argument("dec", type=float, required=True)
+        args = parser.parse_args()
+
+        res = {"tiles":[]}
+
+        for _,tile,epochs in unwtiles.get_tiles(args.ra,args.dec):
+            res["tiles"].append({"coadd_id":str(tile["COADD_ID"]),
+                                 "epochs":[{"band":int(e["BAND"]),
+                                            "epoch":int(e["EPOCH"]),
+                                            "mjdmin":float(e["MJDMIN"]),
+                                            "mjdmax":float(e["MJDMAX"])}
+                                           for e in epochs.data]})
+
+        return jsonify(res)
+
+
+api.add_resource(Tiles_Page, "/tiles")
+
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0")
