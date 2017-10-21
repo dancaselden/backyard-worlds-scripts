@@ -30,7 +30,6 @@ import matplotlib.pyplot as plt
 
 import byw.www.xref as xref
 import byw.www.image_parsing as imp
-import byw.common.radetree as radetree
 import byw.www.comover as comover
 import byw.common.unwise_tiles as unwtiles
 import byw.common.unwise_cutout as unwcutout
@@ -58,8 +57,7 @@ GREY = [
     "gradient:white-black",
 ]
 
-SUBJECTS, RDTREE = xref.read_cache("wsubcache.csv")
-                                                    
+
 # input fits img data, receive png data
 def convert_img(file_data,color,mode,linear,trimbright,right_pad=False):
     img = file_data
@@ -278,8 +276,8 @@ class Xref_Page(Resource):
         parser.add_argument("dec", type=float, required=True)
         args = parser.parse_args()
 
-        subs = RDTREE.in_objs(radetree.Point(None,args.ra,args.dec))
-        return jsonify({"ids":[str(s.entry.subject_id) for s in subs]})
+        subs = xref.get_subjects_by_coordinates(args.ra,args.dec)
+        return jsonify({"ids":[str(s[0]) for s in subs]})
 
 
 api.add_resource(Xref_Page, "/xref")

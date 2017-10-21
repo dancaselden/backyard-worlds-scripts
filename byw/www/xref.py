@@ -1,15 +1,43 @@
+"""
+Get byw subjects, and provide a coordinate-based lookup.
+This all needs to be re-written to support WCS.
+"""
 import os.path
 import requests
 import argparse
 import time
+import numpy as np
 
-import byw.common.radetree as radetree
+
+import byw.common.rdballtree as rdbt
+import astropy.table as at # need to do this first, or astropy will barf?
+import astropy.io as aio
+
 import byw.formats.workflowsubject as wsub
 import byw.formats.subjectextract as sube
 
+
 BYW_PROJ_ID = 2416
 
+# Field of View of a flipbook in degrees
+byw_fov = np.sqrt(((0.0975*2)**2)*2)
+
+# Hold all the subjects by center coordinate in a balltree
+subject_tree = None
+
+
+def get_subjects_by_coordinates(ra,dec):
+    # Get subjects within fov
+    res = subject_tree.query_radius(ra,dec,byw_fov)
+
+    # Sort by nearest
+    res = [(res[0][0][i],res[1][0][i]) for i in xrange(len(res[0][0]))]
+    
+    return sorted(res,key=lambda x: x[1])
+    
+
 def get(endpoint,kwargs):
+    """HTTP GET with accepted headers"""
     heads = {
         "accept":"application/vnd.api+json; version=1",
         "accept-encoding":"gzip, deflate, sdch, br",
@@ -19,6 +47,7 @@ def get(endpoint,kwargs):
     parms = '&'.join(['%s=%s'%(k,kwargs[k]) for k in kwargs])
     return requests.get("https://www.zooniverse.org/api/%s?%s"%
                         (endpoint,parms),headers=heads)
+
 
 def get_subjects_page(wflow, page, pagesz):
     res = []
@@ -47,7 +76,8 @@ def get_subjects_page(wflow, page, pagesz):
         raise
     
     return subs.status_code, res
-    
+
+
 def get_subjects(subs):
     """
     get_subjects searches for workflows for the byw/p9
@@ -119,36 +149,24 @@ def get_subjects(subs):
         
     return new_subs
 
+
 def read_cache(cachepath):
-    # Store subjects
-    subs = {}
-
-    # Store coordinates
-    rdtree = radetree.radeboxes()
-
     # Put a header on the cache if it doesn't
     # yet exist
     if not os.path.exists(cachepath):
         open(cachepath,'wb').write(wsub.WorkflowSubjectHeader+'\n')
-    
-    #######
-    # Read in cached subjects
-    rdr = wsub.WorkflowSubjectReader(cachepath)
-    while True:
-        ws = rdr.readline()
-        if not ws: break
 
-        # Add in to subs & radetree
-        wid = int(ws.workflow_id,10)
-        if not wid in subs:
-            subs[wid] = []
-        subs[wid].append(ws)
-        rdtree.add(radetree.BBox_new_subject(ws))
+    # Load subjects
+    tbl = aio.ascii.Csv().read(cachepath)
 
-    return subs, rdtree
+    # Store in balltree (it's faster w/o a cache)
+    rdtree = rdbt.rdtree(tbl,#filename="%s.rdbtcache"%cachepath,
+                         rakey="ra",deckey="de")
+
+    return rdtree
+
 
 def poll_subjects(subs,rdtree,cachepath):
-    #######
     # Poll get_subjects
     # Update cache if any
     while True:
@@ -184,11 +202,19 @@ def poll_subjects(subs,rdtree,cachepath):
         time.sleep(60*5)
 
 
+def __init(cachepath):
+    """Populate subject_tree"""
+    global subject_tree
+
+    subject_tree = read_cache(cachepath)
+
+
 def main():
-    subs, rdtree = read_cache("wsubcache.csv")
-    
-    poll_subjects(subs, rdtree, "wsubcache.csv")
+    __init("wsubcache.csv")
+
+    raise Exception("Well, it'll be half a year from today, and dan will be mad with himself. It's time to update poll_subjects to support the rdbt structure. this time, don't forget to use an existing wsubcache to start polling. it'll be faster")
+    poll_subjects("wsubcache.csv")
 
     
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()
+else: __init("wsubcache.csv")

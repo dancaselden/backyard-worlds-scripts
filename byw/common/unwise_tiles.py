@@ -5,6 +5,7 @@ import astropy.io as aio
 import sklearn.neighbors as skn
 import astropy.wcs as awcs
 import astropy.io.fits as aif
+import byw.common.rdballtree as rdbt
 
 
 # Units are degrees unless stated
@@ -20,23 +21,6 @@ tile_tree = None
 tr_atlas = None
 
 
-class rdtree:
-    def __init__(self,table):
-        self.table = table
-        x = np.array(np.deg2rad([self.table["DEC"],self.table["RA"]])).transpose()
-        x = x.reshape(-1,2)
-        self.rdtree = skn.BallTree(
-            x,
-            metric="haversine",
-        )
-
-    def query_radius(self,ra,de,sep):        
-        ra,de,sep = np.deg2rad(ra),np.deg2rad(de),np.deg2rad(sep)
-        # TODO: all at once?
-        x = np.array([[de,ra]])
-        return self.rdtree.query_radius(x,sep,return_distance=True)
-
-
 def __init(atlas):
     """
     Initialize the global tile tree and table from CSV,
@@ -50,8 +34,9 @@ def __init(atlas):
     # Initialize atlas
     tr_atlas = aif.open(atlas)
 
-    # Build global tile tree
-    tile_tree = rdtree(tr_atlas[1].data)
+    # Build global tile tree (insignificant improvement w/ cache file)
+    tile_tree = rdbt.rdtree(tr_atlas[1].data,#filename="%s.rdbtcache"%atlas
+                            )
 
 
 def _tile_contains_position(tile,ra,dec):
