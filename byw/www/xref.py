@@ -31,7 +31,7 @@ def get_subjects_by_coordinates(ra,dec):
     res = subject_tree.query_radius(ra,dec,byw_fov)
 
     # Sort by nearest
-    res = [(res[0][0][i],res[1][0][i]) for i in xrange(len(res[0][0]))]
+    res = [(subject_tree.table["subject_id"][res[0][0][i]],res[1][0][i]) for i in xrange(len(res[0][0]))]
     
     return sorted(res,key=lambda x: x[1])
     
