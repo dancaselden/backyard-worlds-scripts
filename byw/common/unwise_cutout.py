@@ -63,7 +63,7 @@ def get_by_tile_epoch(coadd_id,epoch_num,ra,dec,band,size=None):
          coadd_id, # the tile name itself
          "unwise-%s-w%d-img-m.fits"%(coadd_id,band)))
 
-    print path_
+
     # Get content from S3
     sio = StringIO.StringIO()
     tspot.bucket.download_fileobj(path_,sio)
@@ -85,11 +85,21 @@ def get(ra,dec,band,picker=lambda x: True,size=None):
     tiles = []
     
     # For all tiles covering RA, Dec position
+    bandcnt = [0,0]
     for _,tile,epochs in ut.get_tiles(ra,dec):
-        
+
         # For all epochs covered by given date range
         for i in xrange(len(epochs.data)):
             e = epochs.data[i]
+
+            if e["BAND"] == 1:
+                i = bandcnt[0]
+                bandcnt[0] += 1
+            elif e["BAND"] == 2:
+                i = bandcnt[1]
+                bandcnt[1] += 1
+            else:
+                raise Exception("Invalid band %d"%e["BAND"])
 
             # Filter epochs by picker
             if not picker(e,i): continue
