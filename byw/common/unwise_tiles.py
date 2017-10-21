@@ -20,6 +20,8 @@ tile_corner_radius = math.sqrt((
 tile_tree = None
 tr_atlas = None
 
+try2_atlas = None
+
 
 def __init(atlas):
     """
@@ -33,6 +35,10 @@ def __init(atlas):
 
     # Initialize atlas
     tr_atlas = aif.open(atlas)
+
+    # !!!ERRATUM!!!
+    # astropy's HDUList is NOT concurrency safe. Use native python list (slower)
+    tr_atlas = list(tr_atlas)
 
     # Build global tile tree (insignificant improvement w/ cache file)
     tile_tree = rdbt.rdtree(tr_atlas[1].data,#filename="%s.rdbtcache"%atlas

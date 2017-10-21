@@ -308,7 +308,9 @@
 			that.images.push(new_img);
 		    });
 		};
-this.notifygo = function () { console.log("Fired input changed"); }
+                
+                this.notifygo = function () { console.log("Fired input changed"); }
+                
                 this.restart = function () {
                     this.reset();
 
@@ -384,7 +386,7 @@ this.notifygo = function () { console.log("Fired input changed"); }
                 }
 
                 jQuery(".resetters").on("change", ws.restart.bind(ws));
-                jQuery(".resetters").on("change", ws.notifygo.bind(ws));
+                //jQuery(".resetters").on("change", ws.notifygo.bind(ws));
                 jQuery("#speedInput").on('change', ws.updateSpeed.bind(ws));
                 jQuery("#zoomInput").on('change', ws.updateZoom.bind(ws));
 	        jQuery("#linearInput").on("mouseup", ws.restart.bind(ws));

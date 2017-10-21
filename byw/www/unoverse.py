@@ -122,6 +122,7 @@ def get_cutouts(ra, dec, size, band, version, mode, color, linear, trimbright):
         try:
             cutouts = request_cutouts(ra, dec, size, band, version)
         except Exception as e:
+            raise
             return "Error: {0}".format(str(e)), 500
 
         converted = []
