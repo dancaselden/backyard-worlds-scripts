@@ -339,6 +339,33 @@ class Tiles_Page(Resource):
 api.add_resource(Tiles_Page, "/tiles")
 
 
+
+class Cutout_Page(Resource):
+    def get(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument("ra", type=float, required=True)
+        parser.add_argument("dec", type=float, required=True)
+        parser.add_argument("size", type=int, required=True)
+        parser.add_argument("band", type=int, choices=(1,2), required=True)
+        parser.add_argument("epoch", type=int, required=True)
+        args = parser.parse_args()
+
+        # Get coadd ids
+        _,tile,_ = unwtiles.get_tiles(args.ra,args.dec)[0]
+
+        # Get cutout
+        cutout = unwcutout.get_by_tile_epoch(tile["COADD_ID"],args.epoch,args.ra,
+                                             args.dec,args.band,size=args.size,fits=True)
+        sio = StringIO()
+        cutout.writeto(sio)
+        sio.seek(0)
+        
+        return send_file(sio,"application/binary")
+        
+        
+api.add_resource(Cutout_Page, "/cutout")
+
+
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0")
 

@@ -8,7 +8,7 @@ import astropy.wcs as awcs
 path = "unwise/data/timeresolved"
 
 
-def cutout(fitsfileobj,ra,dec,size):
+def cutout(fitsfileobj,ra,dec,size,fits=False):
     hdul = aif.open(fitsfileobj)
 
     wcs = awcs.WCS(hdul[0].header)
@@ -18,43 +18,15 @@ def cutout(fitsfileobj,ra,dec,size):
     cut = hdul[0].data[max(int(py-(size/2)),0):min(int(py+(size/2))+1,2048),
                        max(int(px-(size/2)),0):min(int(px+(size/2))+1,2048)]
 
+    # Convert to fits
+    if fits:
+        # TODO: fitsiness, WCS header, etc.. Astropy doesn't support it w/ cutout
+        cut = aif.PrimaryHDU(cut)
+        
     return cut
 
 
-def _cutout(fitsfileobj,ra,dec,size):
-    """
-    Need to account for roll and such. Use astropy.wcs and hope
-    SkyCoord performance doesn't become a problem.............
-
-    Cut FITS file down to SIZE square around RA, DEC
-    """
-    # Read as fits
-    hdul = aif.open(fitsfileobj)
-
-    # Get tile center
-    center_ra = hdul[0].header["CRVAL1"]
-    center_dec = hdul[0].header["CRVAL2"]
-    
-    # Find x,y
-    py = ((dec-center_dec)*3600)/2.75 # convert deg -> arcsec -> px
-    py = 1024.5+py # add offset to reference point
-
-    px = (ra-center_ra) % 360.0 # Get degrees separation
-    # Account for wrapping
-    if px > 180.0:
-        px = px-360.0
-    px = ((px)*np.cos(np.deg2rad(dec))) # convert to cosd RA
-    px = (px*3600)/2.75 # convert deg -> arcsec -> px
-    px = -px # RA goes backwards
-    px = 1024.5+px # add offset to reference point
-    
-    cut = hdul[0].data[max(int(py-(size/2)),0):min(int(py+(size/2))+1,2048),
-                       max(int(px-(size/2)),0):min(int(px+(size/2))+1,2048)]
-    
-    return cut
-
-
-def get_by_tile_epoch(coadd_id,epoch_num,ra,dec,band,size=None):
+def get_by_tile_epoch(coadd_id,epoch_num,ra,dec,band,size=None,fits=False):
     # Build the URL
     path_ = "/".join(
         (path,
@@ -62,6 +34,7 @@ def get_by_tile_epoch(coadd_id,epoch_num,ra,dec,band,size=None):
          coadd_id[:3], # first 3 digits of RA
          coadd_id, # the tile name itself
          "unwise-%s-w%d-img-m.fits"%(coadd_id,band)))
+    print path_
 
 
     # Get content from S3
@@ -71,12 +44,12 @@ def get_by_tile_epoch(coadd_id,epoch_num,ra,dec,band,size=None):
 
     # Perform cutouts if size is specified
     if size is not None:
-        return cutout(sio,ra,dec,size)
+        return cutout(sio,ra,dec,size,fits=fits)
     
     return sio.getvalue()
 
 
-def get(ra,dec,band,picker=lambda x: True,size=None):
+def get(ra,dec,band,picker=lambda x: True,size=None,fits=False):
     """
     Download tiles by ra, dec, and date range.
     If size is None, return full tiles. Otherwise, cut tiles
@@ -105,21 +78,21 @@ def get(ra,dec,band,picker=lambda x: True,size=None):
             if not picker(e,i): continue
             
             tiles.append(get_by_tile_epoch(tile["COADD_ID"],e["EPOCH"],
-                                           ra,dec,band,size=size))
+                                           ra,dec,band,size=size,fits=fits))
     
     return tiles
 
 
-def get_by_mjd(ra,dec,band,start_mjd=0,end_mjd=2**23,size=None):
+def get_by_mjd(ra,dec,band,start_mjd=0,end_mjd=2**23,size=None,fits=False):
     """Get tiles with epochs within supplied date range"""
     return get(ra,dec,band,
                picker=lambda e,i: (band == e["BAND"] and
                                    not (end_mjd <= e["MJDMIN"] or
                                         start_mjd >= e["MJDMAX"])),
-               size=size)
+               size=size,fits=fits)
 
 
-def get_by_epoch_order(ra,dec,band,epochs,size=None):
+def get_by_epoch_order(ra,dec,band,epochs,size=None,fits=False):
     """
     Return tiles with epochs within the order supplied.
     For example, epochs = (0,1) will return the first 2 epochs
@@ -128,17 +101,17 @@ def get_by_epoch_order(ra,dec,band,epochs,size=None):
     """
     return get(ra,dec,band,
                picker=lambda e,i: (band == e["BAND"] and i in epochs),
-               size=size)
+               size=size,fits=fits)
 
 
-def get_by_epoch_name(ra,dec,band,epochs,size=None):
+def get_by_epoch_name(ra,dec,band,epochs,size=None,fits=False):
     """
     Return tiles with epoch names as supplied, like "e000"
     """
     return get(ra,dec,band,
                picker=lambda e,i: (band == e["BAND"] and
                                    ("e%03d"%(e["epoch"])) in epochs),
-               size=size)
+               size=size,fits=fits)
 
 
 def main():
@@ -152,11 +125,11 @@ def main():
     args = ap.parse_args()
 
     #tiles = get_by_mjd(args.ra,args.dec,args.band,args.start_mjd,args.end_mjd)
-    tiles = get_by_epoch_order(args.ra,args.dec,args.band,epochs=(args.epoch,),size=args.size)
+    tiles = get_by_epoch_order(args.ra,args.dec,args.band,epochs=(args.epoch,),size=args.size,fits=True)
     print "Got %d tiles"%len(tiles)
     print "First one is %d bytes"%len(tiles[0])
     print "And it starts with:",repr(tiles[0][:64])
-    open("/tmp/test","wb").write(tiles[0].copy(order='C'))
+    open("/tmp/test","wb").write(tiles[0])
 
     raise Exception("NOT IMPLEMENTED")
     
