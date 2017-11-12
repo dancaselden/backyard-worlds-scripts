@@ -63,7 +63,7 @@ def _tile_contains_position(tile,ra,dec):
 
 
 import byw.common.imcache as imcache
-cache = imcache.imcache(32)
+cache = imcache.imcache(64)
 
 def get_tiles(*args,**kwargs):
     return cache(_get_tiles,*args,**kwargs)

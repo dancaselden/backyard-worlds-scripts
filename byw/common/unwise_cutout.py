@@ -52,7 +52,7 @@ def cutout(fitsfileobj,ra,dec,size,fits=False):
     return cut
 
 import byw.common.imcache as imcache
-cache = imcache.imcache(32)
+cache = imcache.imcache(64)
 
 def get_by_tile_epoch(*args,**kwargs):
     return cache(_get_by_tile_epoch,*args,**kwargs)
