@@ -351,7 +351,8 @@
 			            var e0 = response["tiles"][0]["epochs"][baseline];
 			            var mean0 = (Number(e0["mjdmin"])+Number(e0["mjdmax"]))/2.0;
 			            var meanx = (Number(e["mjdmin"])+Number(e["mjdmax"]))/2.0;
-			            if (e["band"] == band && Math.abs((mean0%365)-(meanx%365)) < 90) {
+			            var diff = Math.abs((mean0%365)-(meanx%365))
+			            if (e["band"] == band && (diff < 90 || dif > (395-90))) {
 			                that.versions.push(response["tiles"][0]["coadd_id"]+"/"+e["epoch"]);console.log(that.versions)
 			            }
 			        } else {

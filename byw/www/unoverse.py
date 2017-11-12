@@ -35,7 +35,6 @@ import byw.common.unwise_tiles as unwtiles
 import byw.common.unwise_cutout as unwcutout
 
 
-
 app = Flask(__name__)
 api = Api(app)
 app.config['PROPAGATE_EXCEPTIONS'] = True
@@ -144,15 +143,21 @@ def get_cutouts(ra, dec, size, band, version, mode, color, linear, trimbright):
 
     rgb_images = []
     for w1,w2 in images:
+        # Normalize to w1
+        w2 = w2 + (np.median(w1) - np.median(w2))
+        #w12 = (w1+w2)/2.
         # Complex scales to 0,1, works w/ uint
         w1 = imp.complex(w1,mode,linear,trimbright)
         w2 = imp.complex(w2,mode,linear,trimbright)
+        #w12 = imp.complex(w12,mode,linear,trimbright)
         # Invert
         w1 = 1-w1
         w2 = 1-w2
+        #w12 = 1-w12
         # Scale to 0,255
         w1 = skid.img_as_ubyte(w1)
         w2 = skid.img_as_ubyte(w2)
+        #w12 = skid.img_as_ubyte(w12)
         # merge images
         sio = StringIO()
         arr = np.zeros((w1.shape[0],w1.shape[1],3),"uint8")

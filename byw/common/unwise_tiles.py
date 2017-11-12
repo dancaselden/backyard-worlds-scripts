@@ -7,7 +7,6 @@ import astropy.wcs as awcs
 import astropy.io.fits as aif
 import byw.common.rdballtree as rdbt
 
-
 # Units are degrees unless stated
 tile_width = (  2048 # pixels
               * 2.75 # arcseconds per pixel
@@ -24,13 +23,6 @@ try2_atlas = None
 
 
 def __init(atlas):
-    """
-    Initialize the global tile tree and table from CSV,
-    and the tile & date -> epoch list from CSV
-
-    !!epoch list must be sorted by tilename then epoch!!
-    sort tr.csv -t ',' -k 1,4 > tr_sorted.csv
-    """
     global tile_tree, tr_atlas
 
     # Initialize atlas
@@ -53,11 +45,12 @@ def _tile_contains_position(tile,ra,dec):
     """
     # Get a WCS
     epochs = get_epochs(tile)
+    
     wcs = awcs.WCS(epochs.header)
-
+    
     # Find pixel coordinates of ra, dec
     px,py = wcs.wcs_world2pix(np.array([[ra,dec]]),0)[0]
-
+    
     # Calculate sum of distance to two closest edges
     if px > 1024.5: px = 2048-px
     if py > 1024.5: py = 2048-py
@@ -67,8 +60,14 @@ def _tile_contains_position(tile,ra,dec):
     if px <= 1 or py <= 1: return None,None
     
     return px+py,epochs
-    
-def get_tiles(ra,dec):
+
+
+import byw.common.imcache as imcache
+cache = imcache.imcache(32)
+
+def get_tiles(*args,**kwargs):
+    return cache(_get_tiles,*args,**kwargs)
+def _get_tiles(ra,dec):
     """
     Get tiles containing ra, dec
 

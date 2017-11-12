@@ -7,7 +7,7 @@ import astropy.wcs as awcs
 
 path = "unwise/data/timeresolved"
 
-
+# TODO: use the good headers
 def cutout(fitsfileobj,ra,dec,size,fits=False):
     hdul = aif.open(fitsfileobj)
 
@@ -15,18 +15,48 @@ def cutout(fitsfileobj,ra,dec,size,fits=False):
 
     px,py = wcs.wcs_world2pix(np.array([[ra,dec]]),0)[0]
 
-    cut = hdul[0].data[max(int(py-(size/2)),0):min(int(py+(size/2))+1,2048),
-                       max(int(px-(size/2)),0):min(int(px+(size/2))+1,2048)]
+    bot = int(py)-int(size/2)
+    left = int(px)-int(size/2)
+    
+    cut = hdul[0].data[max(bot,0):min(int(py)+int(size/2)+1,2048),
+                       max(left,0):min(int(px)+int(size/2)+1,2048)]
 
     # Convert to fits
     if fits:
         # TODO: fitsiness, WCS header, etc.. Astropy doesn't support it w/ cutout
-        cut = aif.PrimaryHDU(cut)
+        cutf = aif.PrimaryHDU(cut)
+        cutf.header["NAXIS"] = 2
+        cutf.header["NAXIS1"] = cut.shape[1] # X, RA
+        cutf.header["NAXIS2"] = cut.shape[0] # Y, Dec
+        cutf.header["CTYPE1"] = "RA---TAN"
+        cutf.header["CTYPE2"] = "DEC--TAN"
+        cutf.header["CRVAL1"] = ra
+        cutf.header["CRVAL2"] = dec
+        cpx = min(px,int(size/2)
+                  # Preserve fractional pixel value
+                  +(px-int(px)))
+        cpy = min(py,int(size/2)
+                  # Preserve fractional pixel value
+                  +(py-int(py)))
+        cutf.header["CRPIX1"] = cpx+1 # Fits counts px starting at 1
+        cutf.header["CRPIX2"] = cpy+1 # Fits counts px starting at 1
+        cutf.header["CD1_1"] = hdul[0].header["CD1_1"] 
+        cutf.header["CD1_2"] = hdul[0].header["CD1_2"]
+        cutf.header["CD2_1"] = hdul[0].header["CD2_1"]
+        cutf.header["CD2_2"] = hdul[0].header["CD2_2"]
+        sio = StringIO.StringIO()
+        cutf.writeto(sio)
+        sio.seek(0)
+        return sio.getvalue()
         
     return cut
 
+import byw.common.imcache as imcache
+cache = imcache.imcache(32)
 
-def get_by_tile_epoch(coadd_id,epoch_num,ra,dec,band,size=None,fits=False):
+def get_by_tile_epoch(*args,**kwargs):
+    return cache(_get_by_tile_epoch,*args,**kwargs)
+def _get_by_tile_epoch(coadd_id,epoch_num,ra,dec,band,size=None,fits=False):
     # Build the URL
     path_ = "/".join(
         (path,
@@ -34,7 +64,6 @@ def get_by_tile_epoch(coadd_id,epoch_num,ra,dec,band,size=None,fits=False):
          coadd_id[:3], # first 3 digits of RA
          coadd_id, # the tile name itself
          "unwise-%s-w%d-img-m.fits"%(coadd_id,band)))
-    print path_
 
 
     # Get content from S3
@@ -126,11 +155,8 @@ def main():
 
     #tiles = get_by_mjd(args.ra,args.dec,args.band,args.start_mjd,args.end_mjd)
     tiles = get_by_epoch_order(args.ra,args.dec,args.band,epochs=(args.epoch,),size=args.size,fits=True)
-    print "Got %d tiles"%len(tiles)
-    print "First one is %d bytes"%len(tiles[0])
-    print "And it starts with:",repr(tiles[0][:64])
-    open("/tmp/test","wb").write(tiles[0])
+    import sys
+    sys.stdout.write(tiles[0])
 
-    raise Exception("NOT IMPLEMENTED")
     
 if __name__ == "__main__": main()

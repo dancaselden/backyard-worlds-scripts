@@ -94,7 +94,6 @@ def complex(arr,mode,linear=0.00001,trimbright=100.0):
     else:
         raise Exception("Mode %s not supported"%mode)
 
-    print mode,bounds,linear
     # Rescale arr to 0,1
     arr = skimage.exposure.exposure.rescale_intensity(arr,in_range=bounds,out_range=(0,1))
 
