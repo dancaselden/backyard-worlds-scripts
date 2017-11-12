@@ -361,8 +361,7 @@ class Cutout_Page(Resource):
         # Get cutout
         cutout = unwcutout.get_by_tile_epoch(tile["COADD_ID"],args.epoch,args.ra,
                                              args.dec,args.band,size=args.size,fits=True)
-        sio = StringIO()
-        cutout.writeto(sio)
+        sio = StringIO(cutout)
         sio.seek(0)
         
         return send_file(sio,"application/binary")
