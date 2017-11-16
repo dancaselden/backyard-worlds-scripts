@@ -30,20 +30,20 @@ def cutout(fitsfileobj,ra,dec,size,fits=False,scamp=None):
     if fits:
         # TODO: fitsiness, WCS header, etc.. Astropy doesn't support it w/ cutout
         cutf = aif.PrimaryHDU(cut)
-        hdr["N_CALIB"] = row["N_CALIB"]
-        hdr["N_BRIGHT"] = row["N_BRIGHT"]
-        hdr["N_SE"] = row["N_SE"]
-        hdr["ASTRRMS1"] = row["ASTRRMS1"]
-        hdr["ASTRRMS2"] = row["ASTRRMS2"]
+        hdr["N_CALIB"] = scamp["N_CALIB"]
+        hdr["N_BRIGHT"] = scamp["N_BRIGHT"]
+        hdr["N_SE"] = scamp["N_SE"]
+        hdr["ASTRRMS1"] = scamp["ASTRRMS1"]
+        hdr["ASTRRMS2"] = scamp["ASTRRMS2"]
         hdr["NAXIS"] = 2
         cutf.header["NAXIS1"] = cut.shape[1] # X, RA
         cutf.header["NAXIS2"] = cut.shape[0] # Y, Dec
-        hdr["CD1_1"] = row["CD"][0][0]
-        hdr["CD1_2"] = row["CD"][0][1]
-        hdr["CD2_1"] = row["CD"][1][0]
-        hdr["CD2_2"] = row["CD"][1][1]
-        hdr["CDELT1"] = row["CDELT"][0]
-        hdr["CDELT2"] = row["CDELT"][1]
+        hdr["CD1_1"] = scamp["CD"][0][0]
+        hdr["CD1_2"] = scamp["CD"][0][1]
+        hdr["CD2_1"] = scamp["CD"][1][0]
+        hdr["CD2_2"] = scamp["CD"][1][1]
+        hdr["CDELT1"] = scamp["CDELT"][0]
+        hdr["CDELT2"] = scamp["CDELT"][1]
         cpx = min(px,int(size/2)
                   # Preserve fractional pixel value
                   +(px-int(px)))
@@ -54,12 +54,12 @@ def cutout(fitsfileobj,ra,dec,size,fits=False,scamp=None):
         cutf.header["CRPIX2"] = cpy+1 # Fits counts px starting at 1
         hdr["CRVAL1"] = ra
         hdr["CRVAL2"] = dec
-        hdr["CTYPE1"] = row["CTYPE"][0]
-        hdr["CTYPE2"] = row["CTYPE"][1]
-        hdr["LONGPOLE"] = row["LONGPOLE"]
-        hdr["LATPOLE"] = row["LATPOLE"]
-        hdr["PV2_1"] = row["PV2"][0]
-        hdr["PV2_2"] = row["PV2"][1]
+        hdr["CTYPE1"] = scamp["CTYPE"][0]
+        hdr["CTYPE2"] = scamp["CTYPE"][1]
+        hdr["LONGPOLE"] = scamp["LONGPOLE"]
+        hdr["LATPOLE"] = scamp["LATPOLE"]
+        hdr["PV2_1"] = scamp["PV2"][0]
+        hdr["PV2_2"] = scamp["PV2"][1]
 
         sio = StringIO.StringIO()
         cutf.writeto(sio)
