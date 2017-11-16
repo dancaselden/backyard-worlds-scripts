@@ -8,6 +8,8 @@ class imcache:
         if not f in self.cache:
             self.cache[f] = [0,[],[]]
         c = self.cache[f]
+        if len(self.cache) > 32:
+            print "Cachelen:",len(self.cache)
         if not [args,kwargs] in c[1]:
             res = f(*args,**kwargs)
             if c[0] < self.size:

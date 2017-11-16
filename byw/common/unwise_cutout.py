@@ -8,10 +8,15 @@ import astropy.wcs as awcs
 path = "unwise/data/timeresolved"
 
 # TODO: use the good headers
-def cutout(fitsfileobj,ra,dec,size,fits=False):
+def cutout(fitsfileobj,ra,dec,size,fits=False,scamp=None):
     hdul = aif.open(fitsfileobj)
 
-    wcs = awcs.WCS(hdul[0].header)
+    if (scamp is not None and
+        # Test that scamp exists
+        "NAXIS" in scamp):
+        wcs = awcs.WCS(scamp)
+    else:
+        wcs = awcs.WCS(hdul[0].header)        
 
     px,py = wcs.wcs_world2pix(np.array([[ra,dec]]),0)[0]
 
@@ -25,13 +30,20 @@ def cutout(fitsfileobj,ra,dec,size,fits=False):
     if fits:
         # TODO: fitsiness, WCS header, etc.. Astropy doesn't support it w/ cutout
         cutf = aif.PrimaryHDU(cut)
-        cutf.header["NAXIS"] = 2
+        hdr["N_CALIB"] = row["N_CALIB"]
+        hdr["N_BRIGHT"] = row["N_BRIGHT"]
+        hdr["N_SE"] = row["N_SE"]
+        hdr["ASTRRMS1"] = row["ASTRRMS1"]
+        hdr["ASTRRMS2"] = row["ASTRRMS2"]
+        hdr["NAXIS"] = 2
         cutf.header["NAXIS1"] = cut.shape[1] # X, RA
         cutf.header["NAXIS2"] = cut.shape[0] # Y, Dec
-        cutf.header["CTYPE1"] = "RA---TAN"
-        cutf.header["CTYPE2"] = "DEC--TAN"
-        cutf.header["CRVAL1"] = ra
-        cutf.header["CRVAL2"] = dec
+        hdr["CD1_1"] = row["CD"][0][0]
+        hdr["CD1_2"] = row["CD"][0][1]
+        hdr["CD2_1"] = row["CD"][1][0]
+        hdr["CD2_2"] = row["CD"][1][1]
+        hdr["CDELT1"] = row["CDELT"][0]
+        hdr["CDELT2"] = row["CDELT"][1]
         cpx = min(px,int(size/2)
                   # Preserve fractional pixel value
                   +(px-int(px)))
@@ -40,10 +52,15 @@ def cutout(fitsfileobj,ra,dec,size,fits=False):
                   +(py-int(py)))
         cutf.header["CRPIX1"] = cpx+1 # Fits counts px starting at 1
         cutf.header["CRPIX2"] = cpy+1 # Fits counts px starting at 1
-        cutf.header["CD1_1"] = hdul[0].header["CD1_1"] 
-        cutf.header["CD1_2"] = hdul[0].header["CD1_2"]
-        cutf.header["CD2_1"] = hdul[0].header["CD2_1"]
-        cutf.header["CD2_2"] = hdul[0].header["CD2_2"]
+        hdr["CRVAL1"] = ra
+        hdr["CRVAL2"] = dec
+        hdr["CTYPE1"] = row["CTYPE"][0]
+        hdr["CTYPE2"] = row["CTYPE"][1]
+        hdr["LONGPOLE"] = row["LONGPOLE"]
+        hdr["LATPOLE"] = row["LATPOLE"]
+        hdr["PV2_1"] = row["PV2"][0]
+        hdr["PV2_2"] = row["PV2"][1]
+
         sio = StringIO.StringIO()
         cutf.writeto(sio)
         sio.seek(0)
@@ -56,7 +73,8 @@ cache = imcache.imcache(64)
 
 def get_by_tile_epoch(*args,**kwargs):
     return cache(_get_by_tile_epoch,*args,**kwargs)
-def _get_by_tile_epoch(coadd_id,epoch_num,ra,dec,band,size=None,fits=False):
+def _get_by_tile_epoch(coadd_id,epoch_num,ra,dec,band,size=None,fits=False,
+                       scamp=None):
     # Build the URL
     path_ = "/".join(
         (path,
@@ -73,7 +91,7 @@ def _get_by_tile_epoch(coadd_id,epoch_num,ra,dec,band,size=None,fits=False):
 
     # Perform cutouts if size is specified
     if size is not None:
-        return cutout(sio,ra,dec,size,fits=fits)
+        return cutout(sio,ra,dec,size,fits=fits,scamp=scamp)
     
     return sio.getvalue()
 
@@ -107,7 +125,8 @@ def get(ra,dec,band,picker=lambda x: True,size=None,fits=False):
             if not picker(e,i): continue
             
             tiles.append(get_by_tile_epoch(tile["COADD_ID"],e["EPOCH"],
-                                           ra,dec,band,size=size,fits=fits))
+                                           ra,dec,band,size=size,fits=fits,
+                                           scamp=epochs.header))
     
     return tiles
 
