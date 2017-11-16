@@ -5,9 +5,12 @@ class imcache:
         self.size = size
         self.cache = {}
     def get(self,f,*args,**kwargs):
+        return f(*args,**kwargs) # Hitting memory issues. Disabling cache to test
         if not f in self.cache:
             self.cache[f] = [0,[],[]]
         c = self.cache[f]
+        if len(self.cache) > 32:
+            print "Cachelen:",len(self.cache)
         if not [args,kwargs] in c[1]:
             res = f(*args,**kwargs)
             if c[0] < self.size:
