@@ -27,7 +27,7 @@ def cutout(fitsfileobj,ra,dec,size,fits=False,scamp=None):
                        max(left,0):min(int(px)+int(size/2)+1,2048)]
 
     # Convert to fits
-    if fits:
+    if fits and scamp is not None:
         # TODO: fitsiness, WCS header, etc.. Astropy doesn't support it w/ cutout
         cutf = aif.PrimaryHDU(cut)
         hdr["N_CALIB"] = scamp["N_CALIB"]
