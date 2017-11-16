@@ -38,12 +38,12 @@ def cutout(fitsfileobj,ra,dec,size,fits=False,scamp=None):
         cutf.header["NAXIS"] = 2
         cutf.header["NAXIS1"] = cut.shape[1] # X, RA
         cutf.header["NAXIS2"] = cut.shape[0] # Y, Dec
-        cutf.header["CD1_1"] = scamp["CD"][0][0]
-        cutf.header["CD1_2"] = scamp["CD"][0][1]
-        cutf.header["CD2_1"] = scamp["CD"][1][0]
-        cutf.header["CD2_2"] = scamp["CD"][1][1]
-        cutf.header["CDELT1"] = scamp["CDELT"][0]
-        cutf.header["CDELT2"] = scamp["CDELT"][1]
+        cutf.header["CD1_1"] = scamp["CD1_1"]
+        cutf.header["CD1_2"] = scamp["CD1_2"]
+        cutf.header["CD2_1"] = scamp["CD2_1"]
+        cutf.header["CD2_2"] = scamp["CD2_2"]
+        cutf.header["CDELT1"] = scamp["CDELT1"]
+        cutf.header["CDELT2"] = scamp["CDELT2"]
         cpx = min(px,int(size/2)
                   # Preserve fractional pixel value
                   +(px-int(px)))
@@ -54,12 +54,12 @@ def cutout(fitsfileobj,ra,dec,size,fits=False,scamp=None):
         cutf.header["CRPIX2"] = cpy+1 # Fits counts px starting at 1
         cutf.header["CRVAL1"] = ra
         cutf.header["CRVAL2"] = dec
-        cutf.header["CTYPE1"] = scamp["CTYPE"][0]
-        cutf.header["CTYPE2"] = scamp["CTYPE"][1]
+        cutf.header["CTYPE1"] = scamp["CTYPE1"]
+        cutf.header["CTYPE2"] = scamp["CTYPE2"]
         cutf.header["LONGPOLE"] = scamp["LONGPOLE"]
         cutf.header["LATPOLE"] = scamp["LATPOLE"]
-        cutf.header["PV2_1"] = scamp["PV2"][0]
-        cutf.header["PV2_2"] = scamp["PV2"][1]
+        cutf.header["PV2_1"] = scamp["PV2_1"]
+        cutf.header["PV2_2"] = scamp["PV2_2"]
 
         sio = StringIO.StringIO()
         cutf.writeto(sio)
