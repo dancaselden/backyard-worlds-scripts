@@ -30,20 +30,20 @@ def cutout(fitsfileobj,ra,dec,size,fits=False,scamp=None):
     if fits and scamp is not None:
         # TODO: fitsiness, WCS header, etc.. Astropy doesn't support it w/ cutout
         cutf = aif.PrimaryHDU(cut)
-        hdr["N_CALIB"] = scamp["N_CALIB"]
-        hdr["N_BRIGHT"] = scamp["N_BRIGHT"]
-        hdr["N_SE"] = scamp["N_SE"]
-        hdr["ASTRRMS1"] = scamp["ASTRRMS1"]
-        hdr["ASTRRMS2"] = scamp["ASTRRMS2"]
-        hdr["NAXIS"] = 2
+        cutf.header["N_CALIB"] = scamp["N_CALIB"]
+        cutf.header["N_BRIGHT"] = scamp["N_BRIGHT"]
+        cutf.header["N_SE"] = scamp["N_SE"]
+        cutf.header["ASTRRMS1"] = scamp["ASTRRMS1"]
+        cutf.header["ASTRRMS2"] = scamp["ASTRRMS2"]
+        cutf.header["NAXIS"] = 2
         cutf.header["NAXIS1"] = cut.shape[1] # X, RA
         cutf.header["NAXIS2"] = cut.shape[0] # Y, Dec
-        hdr["CD1_1"] = scamp["CD"][0][0]
-        hdr["CD1_2"] = scamp["CD"][0][1]
-        hdr["CD2_1"] = scamp["CD"][1][0]
-        hdr["CD2_2"] = scamp["CD"][1][1]
-        hdr["CDELT1"] = scamp["CDELT"][0]
-        hdr["CDELT2"] = scamp["CDELT"][1]
+        cutf.header["CD1_1"] = scamp["CD"][0][0]
+        cutf.header["CD1_2"] = scamp["CD"][0][1]
+        cutf.header["CD2_1"] = scamp["CD"][1][0]
+        cutf.header["CD2_2"] = scamp["CD"][1][1]
+        cutf.header["CDELT1"] = scamp["CDELT"][0]
+        cutf.header["CDELT2"] = scamp["CDELT"][1]
         cpx = min(px,int(size/2)
                   # Preserve fractional pixel value
                   +(px-int(px)))
@@ -52,14 +52,14 @@ def cutout(fitsfileobj,ra,dec,size,fits=False,scamp=None):
                   +(py-int(py)))
         cutf.header["CRPIX1"] = cpx+1 # Fits counts px starting at 1
         cutf.header["CRPIX2"] = cpy+1 # Fits counts px starting at 1
-        hdr["CRVAL1"] = ra
-        hdr["CRVAL2"] = dec
-        hdr["CTYPE1"] = scamp["CTYPE"][0]
-        hdr["CTYPE2"] = scamp["CTYPE"][1]
-        hdr["LONGPOLE"] = scamp["LONGPOLE"]
-        hdr["LATPOLE"] = scamp["LATPOLE"]
-        hdr["PV2_1"] = scamp["PV2"][0]
-        hdr["PV2_2"] = scamp["PV2"][1]
+        cutf.header["CRVAL1"] = ra
+        cutf.header["CRVAL2"] = dec
+        cutf.header["CTYPE1"] = scamp["CTYPE"][0]
+        cutf.header["CTYPE2"] = scamp["CTYPE"][1]
+        cutf.header["LONGPOLE"] = scamp["LONGPOLE"]
+        cutf.header["LATPOLE"] = scamp["LATPOLE"]
+        cutf.header["PV2_1"] = scamp["PV2"][0]
+        cutf.header["PV2_2"] = scamp["PV2"][1]
 
         sio = StringIO.StringIO()
         cutf.writeto(sio)
