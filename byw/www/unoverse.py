@@ -356,11 +356,11 @@ class Cutout_Page(Resource):
         args = parser.parse_args()
 
         # Get coadd ids
-        _,tile,_ = unwtiles.get_tiles(args.ra,args.dec)[0]
+        _,tile,epochs = unwtiles.get_tiles(args.ra,args.dec)[0]
 
         # Get cutout
         cutout = unwcutout.get_by_tile_epoch(tile["COADD_ID"],args.epoch,args.ra,
-                                             args.dec,args.band,size=args.size,fits=True)
+                                             args.dec,args.band,size=args.size,fits=True,scamp=epochs.header)
         sio = StringIO(cutout)
         sio.seek(0)
         
