@@ -330,13 +330,12 @@ class Tiles_Page(Resource):
 
         res = {"tiles":[]}
 
-        for _,tile,epochs in unwtiles.get_tiles(args.ra,args.dec):
-            res["tiles"].append({"coadd_id":str(tile["COADD_ID"]),
+        for _,epochs in unwtiles.get_tiles(args.ra,args.dec):
+            res["tiles"].append({"coadd_id":str(epochs[0]["COADD_ID"]),
                                  "epochs":[{"band":int(e["BAND"]),
                                             "epoch":int(e["EPOCH"]),
-                                            "mjdmin":float(e["MJDMIN"]),
-                                            "mjdmax":float(e["MJDMAX"])}
-                                           for e in epochs.data]})
+                                            "mjdmean":float(e["MJDMEAN"])}
+                                           for e in epochs]})
 
         return jsonify(res)
 
@@ -356,11 +355,20 @@ class Cutout_Page(Resource):
         args = parser.parse_args()
 
         # Get coadd ids
-        _,tile,epochs = unwtiles.get_tiles(args.ra,args.dec)[0]
+        _,epochs = unwtiles.get_tiles(args.ra,args.dec)[0]
+        for e in epochs:
+            if e["BAND"] == band and e["EPOCH"] == epoch: break
+        else:
+            return "Error: coadd with given band and epoch not found", 404
 
         # Get cutout
-        cutout = unwcutout.get_by_tile_epoch(tile["COADD_ID"],args.epoch,args.ra,
-                                             args.dec,args.band,size=args.size,fits=True,scamp=epochs.header)
+        cutout = unwcutout.get_by_tile_epoch(
+            e["COADD_ID"],
+            args.epoch,args.ra,args.dec,
+            args.band,size=args.size,
+            fits=True,
+            scamp=unwtiles.array_to_cards(e))
+        
         sio = StringIO(cutout)
         sio.seek(0)
         

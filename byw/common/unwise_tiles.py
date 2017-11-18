@@ -6,6 +6,8 @@ import sklearn.neighbors as skn
 import astropy.wcs as awcs
 import astropy.io.fits as aif
 import byw.common.rdballtree as rdbt
+import cPickle as pickle
+import collections
 
 # Units are degrees unless stated
 tile_width = (  2048 # pixels
@@ -17,36 +19,109 @@ tile_corner_radius = math.sqrt((
 
 
 tile_tree = None
-tr_atlas = None
+# Store RA, Dec, Idx in indices
+# Use positional lookups to get offset into
+# _data, _epochs
+tr_atlas_indices = None
+# Store one fitsy Header per coadd_id for testing
+# position within coadd with WCS
+tr_atlas_headers = None
+tr_atlas_epochs = None
 
-try2_atlas = None
+
+def array_to_cards(arr,full=False):
+    # ('COADD_ID', 'S8'), ('BAND', '>i2'), ('EPOCH', '>i2'), ('RA', '>f8'),
+    # ('DEC', '>f8'), ('FORWARD', 'u1'), ('MJDMIN', '>f8'),
+    # ('MJDMAX', '>f8'), ('MJDMEAN', '>f8'), ('DT', '>f8'),
+    # ('N_EXP', '>f4'), ('COVMIN', '>i4'), ('COVMAX', '>i4'),
+    # ('COVMED', '>f4'), ('NPIX_COV0', '>i4'), ('NPIX_COV1', '>i4'),
+    # ('NPIX_COV2', '>i4'), ('LGAL', '>f8'), ('BGAL', '>f8'),
+    # ('LAMBDA', '>f8'), ('BETA', '>f8'), ('SCAMP_HEADER_EXISTS', 'u1'),
+    # ('SCAMP_CONTRAST', '>f4'), ('ASTRRMS1', '>f8'), ('ASTRRMS2', '>f8'),
+    # ('N_CALIB', '>i4'), ('N_BRIGHT', '>i4'), ('N_SE', '>i4'),
+    # ('NAXIS', '>i4', (2,)), ('CD', '>f8', (2, 2)), ('CDELT', '>f8', (2,)),
+    # ('CRPIX', '>f8', (2,)), ('CRVAL', '>f8', (2,)), ('CTYPE', 'S8', (2,)),
+    # ('LONGPOLE', '>f8'), ('LATPOLE', '>f8'), ('PV2', '>f8', (2,))
+    if full:
+        if arr["SCAMP_HEADER_EXISTS"] == 0:
+            kwds = ("COADD_ID","BAND","EPOCH","RA","DEC","FORWARD","MJDMIN","MJDMAX","MJDMEAN","DT","N_EXP","COVMIN","COVMAX","COVMED","HIERARCH NPIX_COV0","HIERARCH NPIX_COV1","HIERARCH NPIX_COV2","LGAL","BGAL","LAMBDA","BETA","HIERARCH SCAMP_HEADER_EXISTS","HIERARCH SCAMP_CONTRAST","ASTRRMS1","ASTRRMS2","N_CALIB","N_BRIGHT","N_SE","NAXIS","NAXIS1","NAXIS2","CTYPE1","CTYPE2")
+            vals = (arr["COADD_ID"],arr["BAND"],arr["EPOCH"],arr["RA"],arr["DEC"],arr["FORWARD"],arr["MJDMIN"],arr["MJDMAX"],arr["MJDMEAN"],arr["DT"],arr["N_EXP"],arr["COVMIN"],arr["COVMAX"],arr["COVMED"],arr["NPIX_COV0"],arr["NPIX_COV1"],arr["NPIX_COV2"],arr["LGAL"],arr["BGAL"],arr["LAMBDA"],arr["BETA"],arr["SCAMP_HEADER_EXISTS"],arr["SCAMP_CONTRAST"],arr["ASTRRMS1"],arr["ASTRRMS2"],arr["N_CALIB"],arr["N_BRIGHT"],arr["N_SE"],2,arr["NAXIS"][0],arr["NAXIS"][1],arr["CTYPE"][0],arr["CTYPE"][1])
+        else:
+            kwds = ("COADD_ID","BAND","EPOCH","RA","DEC","FORWARD","MJDMIN","MJDMAX","MJDMEAN","DT","N_EXP","COVMIN","COVMAX","COVMED","HIERARCH NPIX_COV0","HIERARCH NPIX_COV1","HIERARCH NPIX_COV2","LGAL","BGAL","LAMBDA","BETA","HIERARCH SCAMP_HEADER_EXISTS","HIERARCH SCAMP_CONTRAST","ASTRRMS1","ASTRRMS2","N_CALIB","N_BRIGHT","N_SE","NAXIS","NAXIS1","NAXIS2","CD1_1","CD1_2","CD2_1","CD2_2","CDELT1","CDELT2","CRPIX1","CRPIX2","CRVAL1","CRVAL2","LONGPOLE","LATPOLE","PV2_1","PV2_2","CTYPE1","CTYPE2")
+            vals = (arr["COADD_ID"],arr["BAND"],arr["EPOCH"],arr["RA"],arr["DEC"],arr["FORWARD"],arr["MJDMIN"],arr["MJDMAX"],arr["MJDMEAN"],arr["DT"],arr["N_EXP"],arr["COVMIN"],arr["COVMAX"],arr["COVMED"],arr["NPIX_COV0"],arr["NPIX_COV1"],arr["NPIX_COV2"],arr["LGAL"],arr["BGAL"],arr["LAMBDA"],arr["BETA"],arr["SCAMP_HEADER_EXISTS"],arr["SCAMP_CONTRAST"],arr["ASTRRMS1"],arr["ASTRRMS2"],arr["N_CALIB"],arr["N_BRIGHT"],arr["N_SE"],2,arr["NAXIS"][0],arr["NAXIS"][1],arr["CD"][0][0],arr["CD"][0][1],arr["CD"][1][0],arr["CD"][1][1],arr["CDELT"][0],arr["CDELT"][1],arr["CRPIX"][0],arr["CRPIX"][1],arr["CRVAL"][0],arr["CRVAL"][1],arr["LONGPOLE"],arr["LATPOLE"],arr["PV2"][0],arr["PV2"][1],arr["CTYPE"][0],arr["CTYPE"][1])
+    else:
+        if arr["SCAMP_HEADER_EXISTS"] == 0:
+            kwds = ("RA","DEC","NAXIS","NAXIS1","NAXIS2","CTYPE1","CTYPE2")
+            vals = (arr["RA"],arr["DEC"],2,arr["NAXIS"][0],arr["NAXIS"][1],arr["CTYPE"][0],arr["CTYPE"][1])
+        else:
+            kwds = ("RA","DEC","ASTRRMS1","ASTRRMS2","NAXIS","NAXIS1","NAXIS2","CD1_1","CD1_2","CD2_1","CD2_2","CDELT1","CDELT2","CRPIX1","CRPIX2","CRVAL1","CRVAL2","LONGPOLE","LATPOLE","PV2_1","PV2_2","CTYPE1","CTYPE2")
+            vals = (arr["RA"],arr["DEC"],arr["ASTRRMS1"],arr["ASTRRMS2"],2,arr["NAXIS"][0],arr["NAXIS"][1],arr["CD"][0][0],arr["CD"][0][1],arr["CD"][1][0],arr["CD"][1][1],arr["CDELT"][0],arr["CDELT"][1],arr["CRPIX"][0],arr["CRPIX"][1],arr["CRVAL"][0],arr["CRVAL"][1],arr["LONGPOLE"],arr["LATPOLE"],arr["PV2"][0],arr["PV2"][1],arr["CTYPE"][0],arr["CTYPE"][1])
+
+    h = aif.Header()
+    cards = []
+    for i in xrange(len(kwds)):
+        kwd = kwds[i]
+        cards.append((kwd,vals[i],""))
+
+    h.extend(cards)
+    return h
 
 
 def __init(atlas):
-    global tile_tree, tr_atlas
+    global tile_tree, tr_atlas_epochs, tr_atlas_indices, tr_atlas_headers
 
     # Initialize atlas
-    tr_atlas = aif.open(atlas)
-
     # !!!ERRATUM!!!
-    # astropy's HDUList is NOT concurrency safe. Use native python list (slower)
-    tr_atlas = list(tr_atlas)
+    # astropy's HDUList is NOT concurrency safe.
+    tr_atlas_epochs = aif.open(atlas)[1].data
+    tr_atlas_headers = []
+    
+    # Build list of coadd_id -> index tuples
+    # This is just too damn slow to do up front.
+    # Astropy will take about 20 minutes to build the headers.
+    # Then, they will take 2 gigs because of all the Card
+    # objects within each. It's really a fright. For now, lazily
+    # build headers as they're requested.
+    # That means latency just plain goes up by a full second. Nice.
 
+    tr_indices_ = []
+    last = None
+    for i in xrange(len(tr_atlas_epochs)):
+    #for i in xrange(500):
+        if i % 1000 == 0: print i
+        row = tr_atlas_epochs[i]
+        
+        # Track when switching coadds and add index to tr_indices
+        coadd_id = row[0]
+        if coadd_id != last:
+            # Switching to new coadd_id
+            ra,dec = row[3],row[4]
+            
+            # Add index
+            tr_indices_.append((i,ra,dec))
+
+            # Add one header
+            # This is... slow. very very very very very slow.
+            head = array_to_cards(row)
+            tr_atlas_headers.append(head)
+
+            last = coadd_id
+
+    tr_atlas_indices = np.array(tr_indices_,dtype=[("IDX","i4"),("RA","f4"),
+                                                   ("DEC","f4")])
+    
     # Build global tile tree (insignificant improvement w/ cache file)
-    tile_tree = rdbt.rdtree(tr_atlas[1].data,#filename="%s.rdbtcache"%atlas
-                            )
+    tile_tree = rdbt.rdtree(tr_atlas_indices)
 
 
-def _tile_contains_position(tile,ra,dec):
+def _tile_contains_position(idx,ra,dec):
     """
     Test whether tile contains position.
     Return summed distance to nearest edges, epochs if contained
     Return None,epochs if not contained
     """
     # Get a WCS
-    epochs = get_epochs(tile)
-    
-    wcs = awcs.WCS(epochs.header)
+    wcs = awcs.WCS(tr_atlas_headers[idx])
     
     # Find pixel coordinates of ra, dec
     px,py = wcs.wcs_world2pix(np.array([[ra,dec]]),0)[0]
@@ -57,9 +132,9 @@ def _tile_contains_position(tile,ra,dec):
 
     # Don't return tiles not containing position or
     # with very small cutouts
-    if px <= 1 or py <= 1: return None,None
+    if px <= 1 or py <= 1: return None
     
-    return px+py,epochs
+    return px+py
 
 
 import byw.common.imcache as imcache
@@ -83,10 +158,10 @@ def _get_tiles(ra,dec):
     # to nearest edge
     within_tiles = []
     for tileofs in nearby_tiles[0][0]:
-        tile = tr_atlas[1].data[tileofs]
-        nearest_edge,epochs = _tile_contains_position(tile,ra,dec)
+        nearest_edge = _tile_contains_position(tileofs,ra,dec)
         if nearest_edge is not None:
-            within_tiles.append((nearest_edge,tile,epochs))
+            idx = tr_atlas_indices[tileofs]
+            within_tiles.append((nearest_edge,get_epochs_by_idx(idx)))
 
     # Sort by furthest from an edge. This is a better metric than
     # distance to tile center, because it accurately expresses
@@ -94,9 +169,17 @@ def _get_tiles(ra,dec):
     return sorted(within_tiles,key=lambda x: x[0], reverse=True)
 
 
-def get_epochs(tile):
-    """Get all epochs of given tile"""
-    return tr_atlas[tile["IDX"]]
+def get_epochs_by_idx(idx):
+    # Grab rows until hitting the next coadd_id or
+    # end of the atlas
+    last = None
+    idx = idx[0]
+    for i in xrange(idx,len(tr_atlas_epochs)):
+        coadd_id = tr_atlas_epochs[i][0]
+        if last is not None and last != coadd_id:
+            break
+        last = coadd_id
+    return tr_atlas_epochs[idx:i]
 
 
 def main():
@@ -104,17 +187,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("ra",type=float)
     ap.add_argument("dec",type=float)
-    ap.add_argument("--atlas",default="tr_atlas.fits")
+    ap.add_argument("--atlas",default="tr_neo2_index.fits")
     args = ap.parse_args()
 
     __init(args.atlas)
 
-    for _,tile,epochs in get_tiles(float(args.ra),float(args.dec)):
-        print tile["COADD_ID"],
-        for e in epochs.data:
-            print e,
+    for x,epochs in get_tiles(float(args.ra),float(args.dec)):
+        for e in epochs:
+            print e
         print
 
 
 if __name__ == "__main__": main()
-else: __init("tr_atlas.fits")
+else: __init("tr_neo2_index.fits")
