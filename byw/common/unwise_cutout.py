@@ -11,9 +11,7 @@ path = "unwise/data/timeresolved"
 def cutout(fitsfileobj,ra,dec,size,fits=False,scamp=None):
     hdul = aif.open(fitsfileobj)
 
-    if (scamp is not None and
-        # Test that scamp exists
-        "NAXIS" in scamp):
+    if scamp is not None:
         wcs = awcs.WCS(scamp)
     else:
         wcs = awcs.WCS(hdul[0].header)        
@@ -29,21 +27,9 @@ def cutout(fitsfileobj,ra,dec,size,fits=False,scamp=None):
     # Convert to fits
     if fits and scamp is not None:
         # TODO: fitsiness, WCS header, etc.. Astropy doesn't support it w/ cutout
-        cutf = aif.PrimaryHDU(cut)
-        cutf.header["N_CALIB"] = scamp["N_CALIB"]
-        cutf.header["N_BRIGHT"] = scamp["N_BRIGHT"]
-        cutf.header["N_SE"] = scamp["N_SE"]
-        cutf.header["ASTRRMS1"] = scamp["ASTRRMS1"]
-        cutf.header["ASTRRMS2"] = scamp["ASTRRMS2"]
-        cutf.header["NAXIS"] = 2
+        cutf = aif.PrimaryHDU(cut,header=scamp)
         cutf.header["NAXIS1"] = cut.shape[1] # X, RA
         cutf.header["NAXIS2"] = cut.shape[0] # Y, Dec
-        cutf.header["CD1_1"] = scamp["CD1_1"]
-        cutf.header["CD1_2"] = scamp["CD1_2"]
-        cutf.header["CD2_1"] = scamp["CD2_1"]
-        cutf.header["CD2_2"] = scamp["CD2_2"]
-        cutf.header["CDELT1"] = scamp["CDELT1"]
-        cutf.header["CDELT2"] = scamp["CDELT2"]
         cpx = min(px,int(size/2)
                   # Preserve fractional pixel value
                   +(px-int(px)))
@@ -54,12 +40,6 @@ def cutout(fitsfileobj,ra,dec,size,fits=False,scamp=None):
         cutf.header["CRPIX2"] = cpy+1 # Fits counts px starting at 1
         cutf.header["CRVAL1"] = ra
         cutf.header["CRVAL2"] = dec
-        cutf.header["CTYPE1"] = scamp["CTYPE1"]
-        cutf.header["CTYPE2"] = scamp["CTYPE2"]
-        cutf.header["LONGPOLE"] = scamp["LONGPOLE"]
-        cutf.header["LATPOLE"] = scamp["LATPOLE"]
-        cutf.header["PV2_1"] = scamp["PV2_1"]
-        cutf.header["PV2_2"] = scamp["PV2_2"]
 
         sio = StringIO.StringIO()
         cutf.writeto(sio)
@@ -106,11 +86,11 @@ def get(ra,dec,band,picker=lambda x: True,size=None,fits=False):
     
     # For all tiles covering RA, Dec position
     bandcnt = [0,0]
-    for _,tile,epochs in ut.get_tiles(ra,dec):
+    for _,epochs in ut.get_tiles(ra,dec):
 
         # For all epochs covered by given date range
-        for i in xrange(len(epochs.data)):
-            e = epochs.data[i]
+        for i in xrange(len(epochs)):
+            e = epochs[i]
 
             if e["BAND"] == 1:
                 i = bandcnt[0]
@@ -124,9 +104,9 @@ def get(ra,dec,band,picker=lambda x: True,size=None,fits=False):
             # Filter epochs by picker
             if not picker(e,i): continue
             
-            tiles.append(get_by_tile_epoch(tile["COADD_ID"],e["EPOCH"],
+            tiles.append(get_by_tile_epoch(e["COADD_ID"],e["EPOCH"],
                                            ra,dec,band,size=size,fits=fits,
-                                           scamp=epochs.header))
+                                           scamp=ut.array_to_cards(e)))
     
     return tiles
 
