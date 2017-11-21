@@ -210,7 +210,7 @@ def get_pms(ra,dec,size):
     """
     Takes RA, Dec (degrees, decimal)
 
-    Returns table of proper motion measurements
+    Returns tables of the coadds, detected sources, and proper motion measurements
     """
         # Get tiles
     tiles = api.list_tiles(ra,dec)
@@ -243,7 +243,74 @@ def get_pms(ra,dec,size):
 
     tbl = at.Table(rows=pms,names=("group","time_basis","pmra_total","pmdec_total","pmra","pmdec"))
 
-    return sources,tbl
+    return coadds,sources,tbl
+
+
+def plot_sources(coadds,sources,path):
+    """Plot sources over coadds in PDF"""
+    pdf = PdfPages(path)
+    # Build PDF
+    cols = 3
+    # Deduce # of rows
+    rows = len(coadds)/cols
+    if len(coadds)%cols != 0: rows += 1
+    fig, farr = plt.subplots(rows,cols,
+                             sharex="col",sharey="row")
+
+    # Flatten array
+    if len(farr) < len(coadds):
+        farr = farr.reshape(len(farr)*cols)
+
+    # Add coadds & overlay sources
+    for i in xrange(len(coadds)):
+        coadd = coadds[i]
+        cut = aif.getdata(StringIO(coadd["cutout"]))
+
+        farr[i].imshow(cut,origin="lower",aspect="equal",
+                       interpolation="nearest",cmap="Greys")
+        farr[i].set_title("band %d epoch %d"%(coadd["band"],coadd["epoch"]))
+        srcs = sources[sources["coadd"] == i]
+        farr[i].scatter(srcs["xcentroid"],srcs["ycentroid"],marker=".")
+
+        for src in srcs:
+            farr[i].annotate(
+                src["group"],
+                xy=(src["xcentroid"],src["ycentroid"]), xytext=(-10, 10),
+                textcoords='offset points', ha='right', va='bottom',
+                bbox=dict(boxstyle='round,pad=0.25', fc='yellow', alpha=0.5),
+                arrowprops=dict(arrowstyle = '->', connectionstyle='arc3,rad=0'),
+                fontsize=6)
+
+    pdf.savefig(bbox_inches="tight")
+    plt.close("all")
+    """
+    # List all proper motions
+    if len(pms) != 0:
+        txt = []
+        for i in xrange(len(pms)):
+            txt.append([str(k) for k in pms[i]])
+        plt.table(cellText=txt,colLabels=("Group","Time Basis","pmRA (tot)","pmDec (tot)","pmRA","pmDec"),
+                  loc="upper center")
+        plt.axis("off")
+        pdf.savefig(bbox_inches="tight")
+        plt.close()
+    """
+    """
+    # List all source positions and MJDMeans
+    txt = []
+    for i in xrange(len(global_sources)):
+        for src in global_sources[i]:
+            txt.append([str(i),str(src["mjdmean"]),str(src["ra"]),str(src["dec"])])
+    plt.table(cellText=txt,colLabels=("Group","MJDMean","RA","Dec"),
+              loc="upper center")
+    plt.axis("off")
+    pdf.savefig(bbox_inches="tight")
+    plt.close()
+    """
+    
+    pdf.close()
+    
+
 
 def main():
     import argparse
@@ -255,73 +322,14 @@ def main():
     ap.add_argument("pdfpath",type=str)
     args = ap.parse_args()
 
-    sources,pms = get_pms(args.ra,args.dec,args.size)
+    coadds,sources,pms = get_pms(args.ra,args.dec,args.size)
     
     print pms
     print "Mean PMs",np.mean(pms["pmra"]),np.mean(pms["pmdec"])
     print "Weighted means",np.average(pms["pmra"],weights=pms["time_basis"]),np.average(pms["pmdec"],weights=pms["time_basis"])
 
-    """
-    what a disaster
-    pdf = PdfPages(args.pdfpath)
-        # Build PDF
-        cols = 3
-        # Deduce # of rows
-        rows = len(coadds)/cols
-        if len(coadds)%cols != 0: rows += 1
-        fig, farr = plt.subplots(rows,cols,
-                                 sharex="col",sharey="row")
+    plot_sources(coadds,sources,args.pdfpath)
 
-        # Flatten array
-        if len(farr) < len(coadds):
-            farr = farr.reshape(len(farr)*cols)
-
-        # Add coadds & overlay sources
-        for i in xrange(len(coadds)):
-            coadd = coadds[i]
-            cut = aif.getdata(StringIO(coadd["cutout"]))
-
-            farr[i].imshow(cut,origin="lower",aspect="equal",
-                           interpolation="nearest",cmap="Greys")
-            farr[i].set_title("band %d epoch %d"%(coadd["band"],coadd["epoch"]))
-            srcs = sources[sources["coadd"] == i]
-            farr[i].scatter(srcs["xcentroid"],srcs["ycentroid"],marker=".")
-
-            for src in srcs:
-                farr[i].annotate(
-                    src["group"],
-                    xy=(src["xcentroid"],src["ycentroid"]), xytext=(-10, 10),
-                    textcoords='offset points', ha='right', va='bottom',
-                    bbox=dict(boxstyle='round,pad=0.25', fc='yellow', alpha=0.5),
-                    arrowprops=dict(arrowstyle = '->', connectionstyle='arc3,rad=0'),
-                    fontsize=6)
-
-        pdf.savefig(bbox_inches="tight")
-        plt.close("all")
-
-        # List all proper motions
-        if len(pms) != 0:
-            txt = []
-            for i in xrange(len(pms)):
-                txt.append([str(k) for k in pms[i]])
-            plt.table(cellText=txt,colLabels=("Group","Time Basis","pmRA (tot)","pmDec (tot)","pmRA","pmDec"),
-                      loc="upper center")
-            plt.axis("off")
-            pdf.savefig(bbox_inches="tight")
-            plt.close()
-        
-        # List all source positions and MJDMeans
-        txt = []
-        for i in xrange(len(global_sources)):
-            for src in global_sources[i]:
-                txt.append([str(i),str(src["mjdmean"]),str(src["ra"]),str(src["dec"])])
-        plt.table(cellText=txt,colLabels=("Group","MJDMean","RA","Dec"),
-                  loc="upper center")
-        plt.axis("off")
-        pdf.savefig(bbox_inches="tight")
-        plt.close()
-        
-    pdf.close()
-        """
+    
 if __name__ == "__main__": main()
     
