@@ -10,6 +10,8 @@ import astropy.io.fits as aif
 import astropy.wcs as awcs
 from astropy.stats import sigma_clipped_stats
 from photutils import DAOStarFinder
+import statsmodels.api as sm
+from statsmodels.sandbox.regression.predstd import wls_prediction_std
 
 import byw.common.angsep as angsep
 import byw.common.api_consumer as api
@@ -140,70 +142,30 @@ def group_sources(sources):
 
 
 def measure_pm(sources):
-    # Measure PM over groups of sources
-    # Split so each measurement is between epochs of
-    # the same band and same parallax-group
-    # TODO: Build a proper-motions solution to update PM
-    # estimates for sources, and support testing membership
-    # given ra, dec, mjdmean
-
-    # Measure PMs over sources
+    """Measure PM over groups of sources"""
     pms = []
-    
-    #for gid in xrange(len(global_sources)):
-    #    gs = global_sources[gid]
-    #
-    #    # Sort gs by mjdmean
-    #    gs = sorted(gs,key=lambda x: x["mjdmean"])
-    #
-    #    # Average measurements within 30 days
-    #    #i = 0
-    #    #while i+1 < len(gs):
-    #    #    if (gs[i+1]["mjdmean"] - gs[i]["mjdmean"]) < 30:
-    #    #        # TODO: keep errors, make merging instead improve
-    #    #        #       error. Consider W1 could be better than W2 or
-    #    #        #       the converse
-    #    #        # Temporally local => merge
-    #    #        gs[i]["mjdmean"] = np.mean([gs[i]["mjdmean"],
-    #    #                                    gs[i+1]["mjdmean"]])
-    #    #        gs[i]["ra"] = np.mean([gs[i]["ra"],gs[i+1]["ra"]])
-    #    #        gs[i]["dec"] = np.mean([gs[i]["dec"],gs[i+1]["dec"]])
-    #    #        del gs[i+1]
-    #    #    i += 1
-    #
-    time_basis = 0; pmRA = 0; pmDec = 0
-    previous = {}
-    for source in sources:
-        # Store in "previous" by band & parallax group
-        key = (source["group"],source["band"],source["parallax_group"])
+    for i in xrange(np.max(sources["group"])+1):
+        # Split sources by group
+        group = sources[sources["group"] == i]
 
-        if key not in previous:
-            previous[key] = source
-            continue
+        # h/t delta32
+        # make the design matrix
+        mjd = group["mjdmean"]
+        A = np.matrix([np.ones(np.shape(mjd)),mjd]).T
 
-        # Use previous band,parallax_group entry to calculate PMs
-        prev = previous[key]
-        time_basis_ = source["mjdmean"] - prev["mjdmean"]
-        time_basis += time_basis_
+        # OLS for RA
+        b = group["ra"]
 
-        pmRA_ = ((source["ra"] - prev["ra"]) / (np.cos(np.deg2rad(
-            np.mean([source["dec"],prev["dec"]])))))
-        pmRA += pmRA_
+        fit_x = sm.OLS(b, A).fit()
 
-        pmDec_ = source["dec"] - prev["dec"]
-        pmDec += pmDec_
+        # OLS for Dec
+        b = group["dec"]
 
-        # Record measurement
-        pms.append((source["group"],time_basis_/365.,
-                    pmRA_*3600*1000,pmDec_*3600*1000,
-                    (pmRA_/time_basis_)*3600*1000*365,
-                    (pmDec_/time_basis_)*3600*1000*365
-        ))
+        fit_y = sm.OLS(b, A).fit()
 
-        # Update previous
-        previous[key] = source
-
-    return pms
+        pms.append((i,fit_x.params[1]*3600*1000*365.2422,fit_y.params[1]*3600*1000*365.2422))
+        
+    return at.Table(rows=pms,names=("group","pmra","pmdec"))
 
 
 def get_pms(ra,dec,size):
@@ -237,13 +199,11 @@ def get_pms(ra,dec,size):
 
     # Group sources by proximity
     sources = group_sources(sources)
-
+    
     # Measure PM across sources
     pms = measure_pm(sources)
 
-    tbl = at.Table(rows=pms,names=("group","time_basis","pmra_total","pmdec_total","pmra","pmdec"))
-
-    return coadds,sources,tbl
+    return coadds,sources,pms
 
 
 def plot_sources(coadds,sources,path):
@@ -324,10 +284,9 @@ def main():
 
     coadds,sources,pms = get_pms(args.ra,args.dec,args.size)
     
+    print sources
     print pms
-    print "Mean PMs",np.mean(pms["pmra"]),np.mean(pms["pmdec"])
-    print "Weighted means",np.average(pms["pmra"],weights=pms["time_basis"]),np.average(pms["pmdec"],weights=pms["time_basis"])
-
+    
     plot_sources(coadds,sources,args.pdfpath)
 
     
