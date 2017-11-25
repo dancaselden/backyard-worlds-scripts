@@ -357,7 +357,7 @@ class Cutout_Page(Resource):
         # Get coadd ids
         _,epochs = unwtiles.get_tiles(args.ra,args.dec)[0]
         for e in epochs:
-            if e["BAND"] == band and e["EPOCH"] == epoch: break
+            if e["BAND"] == args.band and e["EPOCH"] == args.epoch: break
         else:
             return "Error: coadd with given band and epoch not found", 404
 
