@@ -76,19 +76,10 @@ def __init(atlas):
     tr_atlas_epochs = aif.open(atlas)[1].data
     tr_atlas_headers = []
     
-    # Build list of coadd_id -> index tuples
-    # This is just too damn slow to do up front.
-    # Astropy will take about 20 minutes to build the headers.
-    # Then, they will take 2 gigs because of all the Card
-    # objects within each. It's really a fright. For now, lazily
-    # build headers as they're requested.
-    # That means latency just plain goes up by a full second. Nice.
-
     tr_indices_ = []
     last = None
     for i in xrange(len(tr_atlas_epochs)):
     #for i in xrange(500):
-        if i % 1000 == 0: print i
         row = tr_atlas_epochs[i]
         
         # Track when switching coadds and add index to tr_indices
