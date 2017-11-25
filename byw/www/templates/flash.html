@@ -340,27 +340,38 @@
 			    "dec": loc_split[1]
 			}, function (response) {
 			    that.versions = [];
-			    // Only use one tile
-			    response["tiles"][0]["epochs"].forEach(function (e) {
-			        var band = that.band_input.val()
-			        if (band == 3) { band = 1; } // Use W1 meta for W1 and W2... can fail in corner cases :(
 			        
+			    var band = that.band_input.val();
+			    if (band == 3) { band = 1; } // Use W1 meta for W1 and W2... can fail in corner cases :(
+			    var baseline = 0;
+			    if (that.coadd_mode_input.val() == "parallax-cancelling-e1") { baseline = 1; }
+			        
+			    // Find e0
+			    var e0;
+			    // Only use one tile
+			    for (e in response["tiles"][0]["epochs"]) {
+			        e = response["tiles"][0]["epochs"][e];
+			        if (Number(e["band"]) == band) {
+			            if (baseline == 0) { e0 = e; break; }
+			            baseline--;
+			        }
+			    }
+			    
+			    for (e in response["tiles"][0]["epochs"]) {
+			        e = response["tiles"][0]["epochs"][e];
 			        if (String(that.coadd_mode_input.val()).startsWith("parallax-cancelling")) {
-			            var baseline = 0;
-			            if (that.coadd_mode_input.val() == "parallax-cancelling-e1") { baseline = 1; }
-			            var e0 = response["tiles"][0]["epochs"][baseline];
-			            var mean0 = (Number(e0["mjdmin"])+Number(e0["mjdmax"]))/2.0;
-			            var meanx = (Number(e["mjdmin"])+Number(e["mjdmax"]))/2.0;
+			            var mean0 = Number(e0["mjdmean"]);
+			            var meanx = Number(e["mjdmean"]);
 			            var diff = Math.abs((mean0%365)-(meanx%365))
 			            if (e["band"] == band && (diff < 90 || diff > (395-90))) {
-			                that.versions.push(response["tiles"][0]["coadd_id"]+"/"+e["epoch"]);console.log(that.versions)
+			                that.versions.push(response["tiles"][0]["coadd_id"]+"/"+e["epoch"]);
 			            }
 			        } else {
 			            if (e["band"] == band) {
-			                that.versions.push(response["tiles"][0]["coadd_id"]+"/"+e["epoch"]);console.log(that.versions)
+			                that.versions.push(response["tiles"][0]["coadd_id"]+"/"+e["epoch"]);
 			            }
 			        }
-			    },that)
+			    }
                             that.make_imgs();
                             that.draw();
 			})
