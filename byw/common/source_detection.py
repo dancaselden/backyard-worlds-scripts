@@ -3,13 +3,14 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
+import skimage.exposure
 import numpy as np
 import astropy.table as at
 from cStringIO import StringIO
 import astropy.io.fits as aif
 import astropy.wcs as awcs
 from astropy.stats import sigma_clipped_stats
-from photutils import DAOStarFinder
+from photutils import DAOStarFinder,IRAFStarFinder
 import statsmodels.api as sm
 from statsmodels.sandbox.regression.predstd import wls_prediction_std
 
@@ -25,11 +26,16 @@ def _detect_sources(cutout):
     """
     im = aif.getdata(StringIO(cutout))
 
+    # Trim image to bring out fainter sources
+    #im = skimage.exposure.exposure.rescale_intensity(
+    #    im,in_range=(np.min(im),60))
     mean, median, std = sigma_clipped_stats(im, sigma=3.0, iters=5)
 
     daofind = DAOStarFinder(fwhm=3.0, threshold=3.*std)
 
     return daofind(im)
+    #iraf = IRAFStarFinder(fwhm=1.5, threshold=2.5*std)
+    #return iraf(im)
 
 
 def organize_coadds(coadds):
@@ -75,6 +81,12 @@ def detect_sources(coadds):
     
     Return list of detected sources w/ info, like band, from coadds tbl
     """
+    if len(coadds) == 0:
+        raise Exception("detect_sources(...) called with empty coadds")
+
+    # Capture WCS at epoch 0
+    wcs0 = awcs.WCS(aif.open(StringIO(coadds[0]["cutout"]))[0])
+    
     sources = []
     for i in xrange(len(coadds)):
         coadd = coadds[i]
@@ -86,6 +98,7 @@ def detect_sources(coadds):
         wcs = awcs.WCS(aif.open(StringIO(coadd["cutout"]))[0])
 
         ras,decs = [],[]
+        xe0,ye0 = [],[]
         for source in tbl:
             # Use SCAMP solutions to convert px/py into RA/Dec
             ra,dec = wcs.wcs_pix2world(np.array([[
@@ -93,19 +106,29 @@ def detect_sources(coadds):
             ]]),0)[0]
             
             ras.append(ra); decs.append(dec)
+
+            # Use SCAMP solution at epoch 0 to convert RA/Dec into
+            # px,py in the epoch 0 cutout
+            pxe0,pye0 = wcs.wcs_world2pix(np.array([[
+                ra,dec
+            ]]),0)[0]
+
+            xe0.append(pxe0); ye0.append(pye0)
             
         tbl.add_columns([at.Column([coadd["band"]]*len(tbl),
-                                   name="band"),
+                                   name="band",dtype="i4"),
                          at.Column([coadd["parallax_group"]]*len(tbl),
-                                   name="parallax_group"),
-                         at.Column(ras,name="ra"),
-                         at.Column(decs,name="dec"),
+                                   name="parallax_group",dtype="i4"),
+                         at.Column(ras,name="ra",dtype="f8"),
+                         at.Column(decs,name="dec",dtype="f8"),
+                         at.Column(xe0,name="xe0",dtype="f8"),
+                         at.Column(ye0,name="ye0",dtype="f8"),
                          at.Column([coadd["mjdmean"]]*len(tbl),
-                                   name="mjdmean"),
+                                   name="mjdmean",dtype="f8"),
                          at.Column([-1]*len(tbl),
-                                   name="group"),
+                                   name="group",dtype="i4"),
                          at.Column([i]*len(tbl),
-                                   name="coadd")])
+                                   name="coadd",dtype="i4")])
         sources.append(tbl)
     
     return at.vstack(sources)
@@ -128,7 +151,7 @@ def group_sources(sources):
             #if np.sqrt(((source["ra"] - gs[0]["ra"])**2)+
             #           ((source["dec"] - gs[0]["dec"])**2)) < 2:
             if angsep.angsep(source["ra"],source["dec"],
-                             gs[0]["ra"],gs[0]["dec"]) < (2.75*3)/3600.:
+                             gs[0]["ra"],gs[0]["dec"]) < (2.75*4)/3600.:
                 # If within 2px, merge
                 source["group"] = j
                 gs.append(source)
@@ -141,6 +164,25 @@ def group_sources(sources):
     return sources
 
 
+def px2ra(px):
+    """Convert pixel separation to RA mas/yr separation"""
+    return (px *
+            -1 * # RA increases as PX decreases
+            2.75 * # 2 arcseconds per unWISE pixel
+            1000 * # 1000 arcseconds per mas
+            365.2422 # days per year
+            )
+
+
+def px2dec(px):
+    """Convert pixel separation to Dec mas/yr separation"""
+    return (px *
+            2.75 * # 2 arcseconds per unWISE pixel
+            1000 * # 1000 arcseconds per mas
+            365.2422 # days per year
+            )
+
+
 def measure_pm(sources):
     """Measure PM over groups of sources"""
     pms = []
@@ -148,23 +190,31 @@ def measure_pm(sources):
         # Split sources by group
         group = sources[sources["group"] == i]
 
-        # h/t delta32
-        # make the design matrix
-        mjd = group["mjdmean"]
-        A = np.matrix([np.ones(np.shape(mjd)),mjd]).T
+        # Split sources by band
+        pmra = []; pmdec = []
+        #for band in (1,2):
+        for i in range(1):
+            subgroup = group#[group["band"] == band]
+            if len(subgroup) <= 1: continue
 
-        # OLS for RA
-        b = group["ra"]
+            # h/t delta32
+            # make the design matrix
+            mjd = subgroup["mjdmean"]
+            A = sm.add_constant(mjd)
 
-        fit_x = sm.OLS(b, A).fit()
+            # OLS for RA
+            b = subgroup["xe0"]
 
-        # OLS for Dec
-        b = group["dec"]
+            fit_x = sm.OLS(b, A).fit()
 
-        fit_y = sm.OLS(b, A).fit()
+            # OLS for Dec
+            b = subgroup["ye0"]
 
-        pms.append((i,fit_x.params[1]*3600*1000*365.2422,fit_y.params[1]*3600*1000*365.2422))
-        
+            fit_y = sm.OLS(b, A).fit()
+            pmra.append(fit_x.params[1])
+            pmdec.append(fit_y.params[1])
+            
+        pms.append((i,px2ra(np.mean(pmra)),px2dec(np.mean(pmdec))))
     return at.Table(rows=pms,names=("group","pmra","pmdec"))
 
 
