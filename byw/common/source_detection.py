@@ -109,7 +109,7 @@ def detect_sources(coadds):
 
             # Use SCAMP solution at epoch 0 to convert RA/Dec into
             # px,py in the epoch 0 cutout
-            pxe0,pye0 = wcs.wcs_world2pix(np.array([[
+            pxe0,pye0 = wcs0.wcs_world2pix(np.array([[
                 ra,dec
             ]]),0)[0]
 
@@ -213,7 +213,8 @@ def measure_pm(sources):
             fit_y = sm.OLS(b, A).fit()
             pmra.append(fit_x.params[1])
             pmdec.append(fit_y.params[1])
-            
+            #print fit_x.summary()
+            #print fit_x.get_influence().summary_table()
         pms.append((i,px2ra(np.mean(pmra)),px2dec(np.mean(pmdec))))
     return at.Table(rows=pms,names=("group","pmra","pmdec"))
 
