@@ -134,77 +134,6 @@ def detect_sources(coadds):
     return at.vstack(sources)
 
 
-def _find_closest(source,group,
-                  getter=lambda x: x,
-                  caveat=lambda x,y: False):
-    closest = None; sep = None
-    for i in xrange(len(group)):
-        s = getter(group[i])
-        if caveat(source,s): continue
-        sep_ = angsep.angsep(s["ra"],s["dec"],
-                             source["ra"],source["dec"])
-        if sep is None or sep_ < sep:
-            closest = i; sep = sep_
-    return closest,sep
-
-
-def _group_sources(sources):
-    global_sources = [] 
-    for i in xrange(len(sources)):
-        # Find membership in global sources
-        idx,sep = _find_closest(sources[i],global_sources,
-                                getter=lambda x: sources[x[-1]],
-                                # Groups can only have one source per goadd
-                                caveat=lambda x,y: x["coadd"] == y["coadd"])
-        # if separated by more than 4px, do not merge
-        # consider preliminary PM measurements and merging groups...
-        # at some point.
-        if idx is None or sep > (4*2.75)/3600:
-            sources[i]["group"] = len(global_sources)
-            global_sources.append([i])
-        else:
-            sources[i]["group"] = idx
-            global_sources[idx].append(i)
-    return global_sources
-
-
-def group_sources(sources):
-    """Group sources by proximity"""
-    # Match the sources through epochs across bands and parallax-groups
-    # TODO: Also consider clustery clustercluster
-    # For now, bin by closest. It doesn't take into account
-    #   consistent magnitudes, shapes, colors, or anything,
-    #   but it's a start...
-    # TODO: for all of these, measure best fits and merge
-    # by best to worst fit. for large collections, use
-    # haversine+balltree
-    w1_groups = _group_sources(sources[sources["band"] == 1])
-    w2_groups = _group_sources(sources[sources["band"] == 2])
-    if w1_groups is None and w2_groups is None:
-        return sources
-    if w1_groups is None:
-        return w2_sources
-    if w2_groups is None:
-        return w1_sources
-
-    # Merge groups
-    global_groups = []
-    for group in w1_groups:
-        # Find membership in global sources
-        idx,sep = _find_closest(sources[group[0]],w2_groups,
-                                getter=lambda x:sources[x[0]])
-        final = group
-        if idx is not None and sep <= (4*2.75)/3600:
-            final.extend(w2_groups.pop(idx))
-
-        for i in final:
-            sources[i]["group"] = len(global_groups)
-
-        global_groups.append(final)
-    
-    return sources
-
-
 def _make_groups_within_bands(sources,band):
     groups = []
     for coadd in xrange(np.max(sources["coadd"])+1):
@@ -247,6 +176,16 @@ def _make_groups_within_bands(sources,band):
 
 
 def group_sources(sources):
+    """
+    Group detected sources across multiple coadds
+    """
+    # TODO: Also consider clustery clustercluster
+    # For now, bin by closest. It doesn't take into account
+    #   consistent magnitudes, shapes, colors, or anything,
+    #   but it's a start...
+    # TODO: for all of these, measure best fits and merge
+    # by best to worst fit. for large collections, use
+    # haversine+balltree
     w1_groups = _make_groups_within_bands(sources,1)
     w2_groups = _make_groups_within_bands(sources,2)
     
