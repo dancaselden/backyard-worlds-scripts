@@ -134,6 +134,40 @@ def detect_sources(coadds):
     return at.vstack(sources)
 
 
+def _find_closest(source,group,
+                  getter=lambda x: x,
+                  caveat=lambda x,y: False):
+    closest = None; sep = None
+    for i in xrange(len(group)):
+        s = getter(group[i])
+        if caveat(source,s): continue
+        sep_ = angsep.angsep(s["ra"],s["dec"],
+                             source["ra"],source["dec"])
+        if sep is None or sep_ < sep:
+            closest = i; sep = sep_
+    return closest,sep
+
+
+def _group_sources(sources):
+    global_sources = [] 
+    for i in xrange(len(sources)):
+        # Find membership in global sources
+        idx,sep = _find_closest(sources[i],global_sources,
+                                getter=lambda x: sources[x[-1]],
+                                # Groups can only have one source per goadd
+                                caveat=lambda x,y: x["coadd"] == y["coadd"])
+        # if separated by more than 4px, do not merge
+        # consider preliminary PM measurements and merging groups...
+        # at some point.
+        if idx is None or sep > (4*2.75)/3600:
+            sources[i]["group"] = len(global_sources)
+            global_sources.append([i])
+        else:
+            sources[i]["group"] = idx
+            global_sources[idx].append(i)
+    return global_sources
+
+
 def group_sources(sources):
     """Group sources by proximity"""
     # Match the sources through epochs across bands and parallax-groups
@@ -141,26 +175,133 @@ def group_sources(sources):
     # For now, bin by closest. It doesn't take into account
     #   consistent magnitudes, shapes, colors, or anything,
     #   but it's a start...
-    global_sources = [] 
-    for i in xrange(len(sources)):
-        source = sources[i]
+    # TODO: for all of these, measure best fits and merge
+    # by best to worst fit. for large collections, use
+    # haversine+balltree
+    w1_groups = _group_sources(sources[sources["band"] == 1])
+    w2_groups = _group_sources(sources[sources["band"] == 2])
+    if w1_groups is None and w2_groups is None:
+        return sources
+    if w1_groups is None:
+        return w2_sources
+    if w2_groups is None:
+        return w1_sources
+
+    # Merge groups
+    global_groups = []
+    for group in w1_groups:
         # Find membership in global sources
-        for j in xrange(len(global_sources)):
-            gs = global_sources[j]
-            # TODO: For larger images, use haversine+balltree
-            #if np.sqrt(((source["ra"] - gs[0]["ra"])**2)+
-            #           ((source["dec"] - gs[0]["dec"])**2)) < 2:
-            if angsep.angsep(source["ra"],source["dec"],
-                             gs[0]["ra"],gs[0]["dec"]) < (2.75*4)/3600.:
-                # If within 2px, merge
-                source["group"] = j
-                gs.append(source)
-                break
-        else:
-            # None found
-            source["group"] = len(global_sources)
-            global_sources.append([source])
+        idx,sep = _find_closest(sources[group[0]],w2_groups,
+                                getter=lambda x:sources[x[0]])
+        final = group
+        if idx is not None and sep <= (4*2.75)/3600:
+            final.extend(w2_groups.pop(idx))
+
+        for i in final:
+            sources[i]["group"] = len(global_groups)
+
+        global_groups.append(final)
     
+    return sources
+
+
+def _make_groups_within_bands(sources,band):
+    groups = []
+    for coadd in xrange(np.max(sources["coadd"])+1):
+        subs = np.where((sources["band"] == band) &
+                        (sources["coadd"] == coadd))[0]
+
+        # Find best matches
+        matches = []
+        # n*m (n**2), can replace w/ balltree+haversine
+        # for large cutouts
+        for s in subs:
+            for g in xrange(len(groups)):
+                matches.append((angsep.angsep(sources[groups[g]][-1]["ra"],
+                                              sources[groups[g]][-1]["dec"],
+                                              sources[s]["ra"],
+                                              sources[s]["dec"]),
+                                s,g))
+        
+        seens = set()
+        seeng = set()
+        # Sort by separation
+        # And add to existing groups
+        for sep,s,g in sorted(matches):
+            if s in seens or g in seeng:
+                continue
+            # Only group things that have moved <= 12"
+            if sep*3600 > 12: break
+            groups[g].append(s)
+            seens.add(s)
+            seeng.add(g)
+
+        # If it didn't fit into an existing group,
+        # make a new group
+        for s in subs:
+            if s in seens: continue
+            groups.append([s])
+            seens.add(s)
+        
+    return groups
+
+
+def group_sources(sources):
+    w1_groups = _make_groups_within_bands(sources,1)
+    w2_groups = _make_groups_within_bands(sources,2)
+    
+    if len(w1_groups) != 0 and len(w2_groups) != 0:    
+        # Find best matches between w1 and w2
+        matches = []
+        for g1 in xrange(len(w1_groups)):
+            for g2 in xrange(len(w2_groups)):
+                s1 = sources[w1_groups[g1][0]]
+                s2 = sources[w2_groups[g2][0]]
+                matches.append((angsep.angsep(s1["ra"],
+                                              s1["dec"],
+                                              s2["ra"],
+                                              s2["dec"]),
+                                g1,g2))
+        
+        seen1 = set()
+        seen2 = set()
+        grps = 0
+        # Sort by separation
+        for sep,g1,g2 in sorted(matches):
+            if g1 in seen1 or g2 in seen2:
+                continue
+            # Group groups within 12"
+            if sep*3600 > 12: break
+            for s in w1_groups[g1]:
+                sources[s]["group"] = grps
+            for s in w2_groups[g2]:
+                sources[s]["group"] = grps
+            grps += 1
+            seen1.add(g1)
+            seen2.add(g2)
+
+        # groupify unmerged groups
+        for g1 in xrange(len(w1_groups)):
+            if g1 in seen1: continue
+            for s in w1_groups[g1]:
+                sources[s]["group"] = grps
+            grps += 1
+            seen1.add(g1)
+        for g2 in xrange(len(w2_groups)):
+            if g2 in seen2: continue
+            for s in w2_groups[g2]:
+                sources[s]["group"] = grps
+            grps += 1
+            seen2.add(g2)
+                
+    elif len(w1_groups) == 0:
+        for i in xrange(len(w2_groups)):
+            for s in w2_groups[i]:
+                sources[s]["group"] = i
+    elif len(w2_groups) == 0:
+        for i in xrange(len(w1_groups)):
+            for s in w1_groups[i]:
+                sources[s]["group"] = i
     return sources
 
 
@@ -192,10 +333,11 @@ def measure_pm(sources):
 
         # Split sources by band
         pmra = []; pmdec = []
+        e_pmra = []; e_pmdec = []
         #for band in (1,2):
-        for i in range(1):
+        for _ in range(1):
             subgroup = group#[group["band"] == band]
-            if len(subgroup) <= 1: continue
+            if len(subgroup) <= 2: continue
 
             # h/t delta32
             # make the design matrix
@@ -212,11 +354,17 @@ def measure_pm(sources):
 
             fit_y = sm.OLS(b, A).fit()
             pmra.append(fit_x.params[1])
+            e_pmra.append(fit_x.bse[1])
             pmdec.append(fit_y.params[1])
-            #print fit_x.summary()
-            #print fit_x.get_influence().summary_table()
-        pms.append((i,px2ra(np.mean(pmra)),px2dec(np.mean(pmdec))))
-    return at.Table(rows=pms,names=("group","pmra","pmdec"))
+            e_pmdec.append(fit_y.bse[1])
+            
+        pms.append((i,px2ra(np.mean(pmra)),px2dec(np.mean(e_pmra)),
+                    px2dec(np.mean(pmdec)),px2dec(np.mean(e_pmdec))))
+    if len(pms) == 0:
+        return []
+    return at.Table(rows=pms,
+                    names=("group","pmra","e_pmra","pmdec","e_pmdec"),
+                    dtype=("i4","f8","f8","f8","f8"))
 
 
 def get_pms(ra,dec,size):
@@ -225,7 +373,8 @@ def get_pms(ra,dec,size):
 
     Returns tables of the coadds, detected sources, and proper motion measurements
     """
-        # Get tiles
+    print ra,dec,size
+    # Get tiles
     tiles = api.list_tiles(ra,dec)
 
     # Just take the best one
@@ -320,7 +469,6 @@ def plot_sources(coadds,sources,path):
     """
     
     pdf.close()
-    
 
 
 def main():
